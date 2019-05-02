@@ -1,2 +1,2 @@
-# protMLP
-MLP regression of protein sequences
+# NN_thermoadaptation
+Using MLP to predict OGT of protein sequence
