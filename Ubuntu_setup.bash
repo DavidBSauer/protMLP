@@ -9,7 +9,7 @@ sudo apt-get -y install wget graphviz
 #echo 'python3 upgrade'
 sudo apt-get -y install python3 python3-dev build-essential
 #echo 'pip3 install'
-sudo apt-get -y install python3-pip wget graphviz
+sudo apt-get -y install python3-pip
 
 #install python packages
 echo 'python package install'
