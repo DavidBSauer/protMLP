@@ -52,7 +52,7 @@ def comparison(my_input):
 	plt.close()
 	return {'AA':name,'r':best['r']}
 
-def calc(z_threshold,all_data,parallel):
+def calc(threshold,all_data,parallel):
 	if not(os.path.isdir('./results/positional_correlations/')):
 		os.mkdir('./results/positional_correlations/')
 
@@ -122,7 +122,7 @@ def calc(z_threshold,all_data,parallel):
 	logger.info('The mean of the r-scores is: '+str(mean))
 	logger.info('The mean of the absolute value of the r-scores is: '+str(np.mean(np.absolute(positions_values))))
 	positions = np.array([int(x[1:]) for x in AA_ref_valid])
-	
+	'''
 	#plot r heatmap
 	matrix = np.zeros(shape=(length,21))
 	matrix.fill(np.nan)
@@ -147,16 +147,16 @@ def calc(z_threshold,all_data,parallel):
 	plt.savefig('./results/Zscore_heatmap.png')
 	plt.clf()
 	plt.close()
-
+	'''
 	#plot r by pos
 	fig, ax = plt.subplots(nrows=1,ncols=1)
 	ax.set_xlabel('AA positions')
 	ax.set_ylabel('Biserial r-value')
-	#add horizontal lines a bounds of bs_threshold or z_threshold
-	if z_threshold > 0:
+	#add horizontal lines a bounds of threshold
+	if threshold > 0:
 		whole_range = range(positions.min()-10,positions.max()+10,1)
-		ax.plot(whole_range,[mean+z_threshold*stdev]*len(whole_range),'-',rasterized=True,linewidth=2,color='#566573')
-		ax.plot(whole_range,[mean-1*z_threshold*stdev]*len(whole_range),'-',rasterized=True,linewidth=2,color='#566573')		
+		ax.plot(whole_range,[threshold]*len(whole_range),'-',rasterized=True,linewidth=2,color='#566573')
+		ax.plot(whole_range,[-1*threshold]*len(whole_range),'-',rasterized=True,linewidth=2,color='#566573')		
 	ax.plot(positions,positions_values,'.',rasterized=True,markersize=14,alpha=0.6)
 	ax.set_title('r-value vs position')
 	plt.savefig('./results/tophat_correlation_vs_position.png')
@@ -165,9 +165,9 @@ def calc(z_threshold,all_data,parallel):
 	plt.close()
 
 	#plot histogram of rs	
-	if z_threshold > 0:
-		plt.axvline(x=mean+z_threshold*stdev,color='#566573')
-		plt.axvline(x=mean-1*z_threshold*stdev,color='#566573')
+	if threshold > 0:
+		plt.axvline(x=threshold,color='#566573')
+		plt.axvline(x=-1*threshold,color='#566573')
 	n,bins,patches=plt.hist(positions_values,50,density=False,label='r')
 	x_lim =max([abs(x) for x in positions_values])
 	plt.xlim(-1.1*x_lim,1.1*x_lim)
@@ -179,8 +179,8 @@ def calc(z_threshold,all_data,parallel):
 	plt.close()
 	
 	logger.info('Before removing columns, the alignment length is: '+str(len(results.keys())))
-	logger.info('Keeping columns from the MSA if abs(Z-score of r-scores) >= '+str(z_threshold))
-	valid_pos = [pos for pos in AA_ref_valid if (mean-bs_threshold*stdev/2<=(results[pos])>=mean+bs_threshold*stdev/2)]
+	logger.info('Keeping columns from the MSA if abs(r-scores) >= '+str(threshold))
+	valid_pos = [pos for pos in AA_ref_valid if abs(results[pos])>=threshold]
 
 	positions_values ={pos:results[pos] for pos in AA_ref_valid}
 	positions_values_z ={pos:(results[pos]-mean)/stdev for pos in AA_ref_valid}

@@ -21,12 +21,13 @@ parser = argparse.ArgumentParser(description='Step 1. Take in an MSA file and as
 files = parser.add_argument_group('Required files')
 
 threshold = 0.995
-validation = False
+group = False
 
 files = parser.add_argument_group('Required file')
 files.add_argument("-f","--fasta",action='append', type=str, help="The MSA file in FASTA format. Can be invoked multiple times for multiple files.",dest='input_fasta',default=[])
 files.add_argument("-s","--stock",action='append', type=str, help="The MSA file in Stockholm format. Can be invoked multiple times for multiple files.",dest='input_stock',default=[])
 parser.add_argument("-t", "--threshold",action='store', type=float, help="Removing sequences which cause gaps at a frequency greater than provided frequency. Default is "+str(threshold)+'.',dest='threshold',default=threshold)
+parser.add_argument("-g", "--group",action='store_true', help="Place idential sequences into the same train/test/valid dataset.",dest='group',default=False)
 getters = parser.add_mutually_exclusive_group()
 getters.add_argument("-w", "--web",action='store_true', help="Access the uniprot website for Uniprot information on each sequence. This is the default behavior.",dest='getters_web',default=False)
 getters.add_argument("-lx", "--local_xml",action='append', type=str, help="Provide a local XML Uniprot database file. Will use this file for retrieving information on each sequence. Can be invoked repeatedly for multiple files.",dest='getters_local_xml',default=None)
@@ -108,20 +109,46 @@ for MSA_file in MSA_files.keys():
 	Bio.AlignIO.write(MSA_degapped,MSA_file.split('.')[0]+"_degapped.fa", "fasta")
 	logger.info('Sequences after degapping: '+str(len(MSA_degapped)))
 
-	#generate training/testing/validation datasets\
-	logger.info('Generating training/testing/validation datasets')
-	MSA_training =[]
-	MSA_testing =[]
-	MSA_validation =[]
-	for x in MSA_degapped:
-		rand = random.random()
-		if rand<=0.7:
-			MSA_training.append(x)
-		elif rand<=0.8:
-			MSA_validation.append(x)
-		else:
-			#assign 20% to testing set
-			MSA_testing.append(x)	
+    if args.group:
+        seq_dict = {}
+        for entry in MSA_degapped:
+            if str(entry.seq) in seq_dict.keys():
+                seq_dict[str(entry.seq)].append(entry)
+            else:
+                seq_dict[str(entry.seq)]=[entry]
+            
+        #generate training/testing/validation datasets\
+        logger.info('Generating training/testing/validation datasets after grouping identical sequences')
+        MSA_training =[]
+        MSA_testing =[]
+        MSA_validation =[]
+        entries= list(seq_dict.keys())
+        random.shuffle(entries)
+        for x in entries:
+            rand = random.random()
+            if rand<=0.7:
+                MSA_training=MSA_train+seq_dict[x]
+            elif rand<=0.8:
+                MSA_validation=MSA_validation+seq_dict[x]
+            else:
+                #assign 20% to testing set
+                MSA_testing=MSA_testing+seq_dict[x]
+
+    else:
+        #generate training/testing/validation datasets\
+        logger.info('Generating training/testing/validation datasets without grouping sequences')
+        MSA_training =[]
+        MSA_testing =[]
+        MSA_validation =[]
+        for x in MSA_degapped:
+            rand = random.random()
+            if rand<=0.7:
+                MSA_training.append(x)
+            elif rand<=0.8:
+                MSA_validation.append(x)
+            else:
+                #assign 20% to testing set
+                MSA_testing.append(x)	
 
 	MSA_training=MultipleSeqAlignment(MSA_training)
 	Bio.AlignIO.write(MSA_training, MSA_file.split('.')[0]+"_training.fa", "fasta")
