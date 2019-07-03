@@ -19,6 +19,7 @@ def uniprot(txt):
 	return txt.split('_')[0]
 
 def retriever(x):
+	"""Get species of origin for protein (if available) and return if protein is non-fragment"""
 	t0=time.time()
 	to_return = (False,None)
 	url = 'http://www.uniprot.org/uniprot/'+uniprot(x)+'.xml'	
@@ -51,6 +52,7 @@ def retriever(x):
 	return to_return	
 
 def non_frag_spec(MSA):
+	"""Label each sequence with the species of origin if available and the sequence is non-fragment"""
 	#run for list of ids to avoid repeatedly looking up multi-domain proteins
 	ids = list(set([uniprot(x.id) for x in MSA]))
 	logger.info('Uniprot records to retrieve: '+str(len(ids)))

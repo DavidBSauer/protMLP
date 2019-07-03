@@ -5,10 +5,9 @@ from Bio.SeqRecord import SeqRecord
 from Bio.Seq import Seq
 from collections import Counter
 
-#the threshold is the maximum gap frequency allowed at any position within the alignment
-
 def gaps(MSA_ref,threshold):
-#	threshold = 0.999
+	"""Remove gap causing sequences based on provided threshold"""
+	#the threshold is the maximum gap frequency allowed at any position within the alignment
 	seq_num =0
 	length = MSA_ref.get_alignment_length()
 	seq_count = [0]*(length)
@@ -35,6 +34,7 @@ def gaps(MSA_ref,threshold):
 	return MSA2
 	
 def removeXs(MSA):
+	"""Remove sequences with non-canonical AAs"""
 	seqs = []
 	for x in MSA:
 		if set(list(str(x.seq).upper())).issubset({'A','C','D','E','F','G','H','I','K','L','M','N','P','Q','R','S','T','V','W','Y','-','.'}):
@@ -43,6 +43,7 @@ def removeXs(MSA):
 	return MSA
 
 def rendundant_names(MSA):
+	"""Give unique names to sequences"""
 	names = []
 	for x in MSA:
 		names.append(x.id.split('/')[0].split('.')[0])

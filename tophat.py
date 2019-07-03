@@ -16,6 +16,7 @@ from scipy.optimize import minimize
 
 
 def comparison(my_input):
+	"""Fit the presence or absence of a particular AA to the top-hat function"""
 	(name,values,target) = my_input
 	if len(list(set(values))) ==1:
 		#catch manually to avoid error messages
@@ -53,6 +54,7 @@ def comparison(my_input):
 	return {'AA':name,'r':best['r']}
 
 def calc(threshold,all_data,parallel):
+	"""Fit a top hat function to all positions of the one-hot encoded sequence"""
 	if not(os.path.isdir('./results/positional_correlations/')):
 		os.mkdir('./results/positional_correlations/')
 
@@ -122,32 +124,7 @@ def calc(threshold,all_data,parallel):
 	logger.info('The mean of the r-scores is: '+str(mean))
 	logger.info('The mean of the absolute value of the r-scores is: '+str(np.mean(np.absolute(positions_values))))
 	positions = np.array([int(x[1:]) for x in AA_ref_valid])
-	'''
-	#plot r heatmap
-	matrix = np.zeros(shape=(length,21))
-	matrix.fill(np.nan)
-	for x in AA_ref_valid:
-		matrix[int(x[1:])-1][AA_dict[x[0]]] = results[x]
-	matrix = np.ma.masked_where(np.isnan(matrix),matrix)
-	matrix = (matrix-np.mean(matrix))/np.std(matrix)
-	
-	new_matrix = matrix.transpose()
-	new_matrix = np.flipud(new_matrix)
-	plt.figure(figsize=(33,18), dpi=300)
-	ax = plt.axes()
-	plt.tick_params(axis='y', which='both',left=False,right=False)
-	ax.set_yticks(pos + (1.0 / 2))
-	ax.set_yticklabels(yticklabels)
-	ax.tick_params(axis='both',labelsize=font_size)
-	bound = np.array([-1*np.amin(new_matrix),np.amax(new_matrix)]).max()
-	p = ax.pcolormesh(new_matrix,cmap=cm.coolwarm,vmin=-1*bound,vmax=bound)
-	cbar = plt.colorbar(p)
-	cbar.ax.tick_params(labelsize = font_size)
-	plt.tight_layout()
-	plt.savefig('./results/Zscore_heatmap.png')
-	plt.clf()
-	plt.close()
-	'''
+
 	#plot r by pos
 	fig, ax = plt.subplots(nrows=1,ncols=1)
 	ax.set_xlabel('AA positions')

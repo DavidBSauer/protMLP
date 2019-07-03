@@ -20,8 +20,8 @@ def temp(txt):
 	return float(b)
 
 def plot(input):
+	"""plot heatmap of AA by position"""
 	(name,alignment) = input
-	#plot heatmap of AA by position
 	length = alignment.get_alignment_length()
 	num = len(alignment)
 	matrix = np.zeros(shape=(length,21))
@@ -55,6 +55,7 @@ def plot(input):
 	return None
 
 def convert(inputs):
+	"""One-hot encode sequence"""
 	(AA_sequence,length) = inputs
 	working_AA_sequence = str(AA_sequence.seq).upper().replace('.','-')
 	full_vector = [False]*(length*21)
@@ -63,6 +64,7 @@ def convert(inputs):
 	return (AA_sequence.id,full_vector+[temp(AA_sequence.id)])
 		
 def convert_no_temp(inputs):
+	"""One-hot encode sequence without including a reported Tg"""
 	(AA_sequence,length) = inputs
 	working_AA_sequence = str(AA_sequence.seq).upper().replace('.','-')
 	full_vector = [False]*(length*21)
@@ -72,6 +74,7 @@ def convert_no_temp(inputs):
 
 
 def convert_to_pd(files,parallel):
+	"""Convert an MSA to a Pandas dataframe of one-hot encoded sequences"""
 	#plot heatmaps of MSAs
 	to_plot = [(key,files[key]) for key in ['train','test','valid']]
 	if parallel:
@@ -127,7 +130,7 @@ def convert_to_pd(files,parallel):
 	return all_pd_data
 	
 def convert_on_template(file,template,parallel):
-	#covert MSAs into a series of lists with binary data encoding the sequence of the varying positions
+	"""Convert an MSA to a Pandas dataframe of one-hot encoded sequences based on a provided template of observed AAs"""
 	length = file.get_alignment_length()
 	logger.info('Input alignment length: '+str(length))
 	logger.info('Giving a (maximum) one-hot encoded alignment length of: '+str(length*21))

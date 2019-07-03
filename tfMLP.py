@@ -40,6 +40,7 @@ n_input = None
 seq_data = None
 	
 def setup(all_data):
+	"""Set constant variables"""
 	global seq_data
 	seq_data = all_data
 	global n_train_seq
@@ -48,6 +49,7 @@ def setup(all_data):
 	n_input = n_input-2
 	
 def connections(model):
+	"""Calculate the number of parameters of a topology"""
 	biases = sum(model)+1
 	model = [n_input]+list(model)+[1]
 	weights = sum([model[x]*model[x+1] for x in range(0,len(model)-1,1)])
@@ -55,6 +57,7 @@ def connections(model):
 	return conns
 
 def trainer(input):
+	"""Train a MLP or linear regression"""
 	(NN,activ)=input
 	if activ == 'Linear':
 		folder = './results/Linear'
@@ -136,6 +139,7 @@ def trainer(input):
 	return {'NN':NN,'MSE':MSE,'RMSE':RMSE,'r':r,'data_param':data_param}
 
 def final_eval(input):
+	"""Evaluate a MLP against the test dataset"""
 	(NN,activ)=input
 	if activ == 'Linear':
 		folder = './results/Linear'
@@ -258,7 +262,8 @@ def final_eval(input):
 	return {'NN':NN,'MSE':MSE,'RMSE':RMSE,'r':r,'data_param':data_param}
 
 	
-def infer(model,data):	
+def infer(model,data):
+	"""Load a model and infer the Tg of provided sequences"""	
 	working_data = data.copy(deep=True)	
 	ids = working_data.pop('id')
 	model = keras.models.load_model(model)

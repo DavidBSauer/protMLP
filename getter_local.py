@@ -14,6 +14,7 @@ def uniprot(txt):
 DBs =[]
 
 def setup_xml(files):
+	"""Load XML files of Uniprot data"""
 	global DBs
 	for file in files:
 		try:
@@ -25,6 +26,7 @@ def setup_xml(files):
 			logger.info('Loaded the Uniprot XML file: '+file+'')
 
 def setup_dat(files):
+	"""Load DAT files of Uniprot data"""
 	global DBs
 	for file in files:
 		try:
@@ -37,6 +39,7 @@ def setup_dat(files):
 
 
 def retriever(x):
+	"""If sequences is non-fragment, return the species of origin for a sequence (if available)"""
 	to_return = (False,None)
 	for db in DBs:
 		if x in db:
@@ -54,6 +57,7 @@ def retriever(x):
 	return to_return
 
 def non_frag_spec(MSA):
+	"""Label each sequence with the species of origin if available and the sequence is non-fragment"""
 	#run for list of ids to avoid repeatedly looking up multi-domain proteins
 	ids = list(set([uniprot(x.id) for x in MSA]))
 	logger.info('Uniprot records to retrieve: '+str(len(ids)))

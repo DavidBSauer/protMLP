@@ -12,7 +12,7 @@ training_seqs = 0
 parallel = False
 
 def builder(generations,num_per_generation,depth,level,train,layer,par):
-
+	"""Build MLP topologies based on maximum width, depth, overdetermined level"""
 	global max_depth 
 	max_depth = depth
 	global overdetermined_level
@@ -57,7 +57,8 @@ def builder(generations,num_per_generation,depth,level,train,layer,par):
 		return (False,NNs)
 			
 #implement a genetic algorithm to search for an optimal topology
-def recombiner(input):	
+def recombiner(input):
+	"""Randomly recombine two topologies"""	
 	(net1,net2) = input
 	joint1 = random.randint(0,len(net1)-1)
 	joint2 = random.randint(0,len(net2)-1)
@@ -68,6 +69,7 @@ def recombiner(input):
 	return (False,None)
 
 def recombine(possible):
+	"""Recombine topologies"""
 	pairs = [(possible[x],possible[y]) for x in range(0,len(possible),1) for y in range(0,len(possible),1) if not(x == y)]
 	if parallel:
 		p = mp.Pool()
@@ -80,6 +82,7 @@ def recombine(possible):
 	return results
 
 def mutater(network):
+	"""Randomly mutate a topology"""
 	new_network =[x for x in network]
 	layer = random.randint(0,len(new_network)-1)
 	new_network[layer] = random.randint(2,max_layer)
@@ -88,6 +91,7 @@ def mutater(network):
 	return (False,None)
 
 def mutate(possible):
+	"""Mutate topologies"""
 	if parallel:
 		p = mp.Pool()
 		results = p.map(mutater,possible)		
