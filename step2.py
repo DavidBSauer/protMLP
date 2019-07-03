@@ -22,29 +22,29 @@ from Bio.Seq import Seq
 import csv
 import argparse
 
-parser = argparse.ArgumentParser(description='Step 2. Take in a species-OGT file and MSA files. Assign OGTs to all sequences based on assigned species, then remove sequences outside of provided OGT range.')
+parser = argparse.ArgumentParser(description="Step 2. Take in a species-Tg file and MSA files. Assign Tg's to all sequences based on assigned species, then remove sequences outside of provided Tg range.")
 files = parser.add_argument_group('Required files')
 def_range = 'all'
 
 files = parser.add_argument_group('Required file')
-files.add_argument("-ogt",action='store', type=str, help="The species-OGT file.",dest='ogt',default=None)
+files.add_argument("-t",action='store', type=str, help="The species-Tg file.",dest='ogt',default=None)
 files.add_argument("-s","--seq",action='append', type=str, help="The MSA file in FASTA format.",dest='MSA_file',default=None)
-parser.add_argument("-r", "--range",action='store', type=str, help="The range of OGTs to keep. Can be 'all', some combination of p/m/t for psychrophiles, mesophile, or thermophiles. Or a given range of temperatures, with '-' denoting ranges and ',' for multiple ranges. Examples: 'mt' or '25-35,45-65'. Default is "+str(def_range)+'.',dest='range',default=def_range)
+parser.add_argument("-r", "--range",action='store', type=str, help="The range of Tg's to keep. Can be 'all', some combination of p/m/t for psychrophiles, mesophile, or thermophiles. Or a given range of temperatures, with '-' denoting ranges and ',' for multiple ranges. Examples: 'mt' or '25-35,45-65'. Default is "+str(def_range)+'.',dest='range',default=def_range)
 
 args = parser.parse_args()
 data_range = args.range
 
 try:
 	#read in species-OGT file
-	logger.info("Species-OGT file: "+args.ogt)
+	logger.info("Species-Tg file: "+args.ogt)
 	infile = open(args.ogt,'r')
 	reader = csv.reader(infile,delimiter='\t')
 	species_temp = dict((str(rows[0]),float(rows[1])) for rows in reader)
 	infile.close()    
-	logger.info("found "+str(len(species_temp.keys()))+" species-OGT pairs")
+	logger.info("found "+str(len(species_temp.keys()))+" species-Tg pairs")
 except:
-	logger.info("Problem reading the species-OGT file. Quitting")
-	print("Problem reading the species-OGT file. Quitting")
+	logger.info("Problem reading the species-Tg file. Quitting")
+	print("Problem reading the species-Tg file. Quitting")
 	sys.exit()
 else:
 	pass
@@ -89,7 +89,7 @@ if not(all_ogt):
 if not(all_ogt or psych or meso or thermo):
 	OGT_range = [(float(subrange.split('-')[0]),float(subrange.split('-')[1])) for subrange in data_range.split(',')]
 
-logger.info('Including sequences within the OGT ranges of: '+', '.join([' to '.join([str(y) for y in x]) for x in OGT_range]))
+logger.info('Including sequences within the Tg ranges of: '+', '.join([' to '.join([str(y) for y in x]) for x in OGT_range]))
 
 #assign temp to each sequence based on species
 def spec(txt):
@@ -102,11 +102,11 @@ for file in files.keys():
 	MSA_file = files[file]
 	logger.info('Number of sequences in the MSA: '+str(len(MSA_file)))
 	assigned = []
-	logger.info('Assigning OGTs to sequences for MSA')
+	logger.info("Assigning Tg's to sequences for MSA")
 	for x in MSA_file:
 		if spec(x.id) in species_temp.keys():
 			assigned.append(SeqRecord(Seq(str(x.seq),x.seq.alphabet), x.id+'|'+str(species_temp[spec(x.id)]),'',''))
-	logger.info('Number of sequences with assigned OGT: '+str(len(assigned)))				
+	logger.info('Number of sequences with assigned Tg: '+str(len(assigned)))				
 	MSA_file= MultipleSeqAlignment(assigned)
 	AlignIO.write(MSA_file,file.split('.')[0]+"_assigned.fa", "fasta")
 
@@ -116,7 +116,7 @@ for file in files.keys():
 		return float(b)
 
 	#retain only those sequences within the desired OGT range
-	logger.info('Retaining only those OGTs in range')
+	logger.info("Retaining only those Tg's in range")
 	in_range = []
 	for x in MSA_file:
 		for ranges in OGT_range:

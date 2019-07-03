@@ -35,7 +35,7 @@ def comparison(my_input):
 				best ={'hat_mid':hat_mid,'hat_width':hat_width,'r':curr_r}
 	
 	fig, ax = plt.subplots(nrows=1,ncols=1)
-	ax.set_xlabel('Reported Species OGT (C)')
+	ax.set_xlabel('Reported Species Tg (C)')
 	ax.set_ylabel('Boolean probability of '+name)
 	ax.set_yticks([0,1])
 	ax.set_yticklabels(['False','True'])
@@ -46,7 +46,7 @@ def comparison(my_input):
 		target,values,preds = zip(*sorted(zip(target,values,preds)))
 		ax.plot(target,preds,'-',rasterized=True,markersize=14,alpha=0.6)
 	ax.plot(target,values,'.',rasterized=True,markersize=14,alpha=0.6)
-	ax.set_title('Boolean probability of '+name+' vs OGT\nBP r= '+format(best['r'],'.3f'))
+	ax.set_title('Boolean probability of '+name+' vs Tg\nBP r= '+format(best['r'],'.3f'))
 	plt.savefig('./results/positional_correlations/'+name+'_correlation.png')
 	plt.cla()
 	plt.clf()

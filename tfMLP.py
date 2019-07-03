@@ -210,8 +210,8 @@ def final_eval(input):
 	ax.set_ylim(minimum-5,maximum+5)
 	ax.set_xlim(minimum-5,maximum+5)
 	ax.plot(range(int(minimum*0.9)-1,int(maximum*1.1)+1,1),range(int(minimum*0.9)-1,int(maximum*1.1)+1,1),'--',linewidth=3,color='#566573',alpha=1)
-	ax.set_xlabel('Reported Species OGT (C)')
-	ax.set_ylabel('Predicted Species OGT (C)')
+	ax.set_xlabel('Reported Species Tg (C)')
+	ax.set_ylabel('Predicted Species Tg (C)')
 	#plot the training data
 	ax.plot(train_target.values,train_pred,'.',label='Training Set',rasterized=True,markersize=14,color='#222299',alpha=0.6)
 	#plot the valid data
@@ -240,7 +240,7 @@ def final_eval(input):
 		yrange = max(residuals)
 		ax.set_ylim(-1.1*yrange,1.1*yrange)
 		ax.plot(range(int(minimum*0.9)-1,int(maximum*1.1)+1,1),[0]*len(range(int(minimum*0.9)-1,int(maximum*1.1)+1,1)),'--',linewidth=3,color='#566573',alpha=1)
-		ax.set_xlabel('Reported Species OGT (C)')
+		ax.set_xlabel('Reported Species Tg (C)')
 		ax.set_ylabel('Prediction residual (C)')
 		#plot the training data
 		ax.plot(train_target.values,train_residuals,'.',label='Training Set',rasterized=True,markersize=14,color='#222299',alpha=0.6)
