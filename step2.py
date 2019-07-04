@@ -22,11 +22,10 @@ from Bio.Seq import Seq
 import csv
 import argparse
 
-parser = argparse.ArgumentParser(description="Step 2. Take in a species-Tg file and MSA files. Assign Tg's to all sequences based on assigned species, then remove sequences outside of provided Tg range.")
-files = parser.add_argument_group('Required files')
 def_range = 'all'
 
-files = parser.add_argument_group('Required file')
+parser = argparse.ArgumentParser(description="Step 2. Take in a species-Tg file and MSA files. Assign Tg's to all sequences based on assigned species, then remove sequences outside of provided Tg range.")
+files = parser.add_argument_group('Required files')
 files.add_argument("-t",action='store', type=str, help="The species-Tg file.",dest='ogt',default=None)
 files.add_argument("-s","--seq",action='append', type=str, help="The MSA file in FASTA format.",dest='MSA_file',default=None)
 parser.add_argument("-r", "--range",action='store', type=str, help="The range of Tg's to keep. Can be 'all', some combination of p/m/t for psychrophiles, mesophile, or thermophiles. Or a given range of temperatures, with '-' denoting ranges and ',' for multiple ranges. Examples: 'mt' or '25-35,45-65'. Default is "+str(def_range)+'.',dest='range',default=def_range)
