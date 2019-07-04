@@ -1,5 +1,5 @@
 # protMLP
-Use homologus protein sequences to predict the growth temperature of the species of origin.
+Predict from a protein sequence the growth temperature of the species of origin.
 
 ## Step 1 - Retrieve the species of origin for each protein seqeunce.
 Take in an MSA file and assign the species from Uniprot (locally or via web). Will remove fragments and gap incuding sequences and generate train, test, and validation MSAs
