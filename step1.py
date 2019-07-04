@@ -17,7 +17,7 @@ from Bio.Align import MultipleSeqAlignment
 import random
 import argparse
 
-parser = argparse.ArgumentParser(description='Step 1. Take in an MSA file and assign the species from Uniprot (locally or via web). Will remove fragments and gap incuding sequences and generate train, test, and optionally validation MSAs')
+parser = argparse.ArgumentParser(description='Step 1. Take in an MSA file and assign the species from Uniprot (locally or via web). Will remove fragments and gap incuding sequences and generate train, test, and validation MSAs')
 files = parser.add_argument_group('Required files')
 
 threshold = 0.995
@@ -109,46 +109,50 @@ for MSA_file in MSA_files.keys():
 	Bio.AlignIO.write(MSA_degapped,MSA_file.split('.')[0]+"_degapped.fa", "fasta")
 	logger.info('Sequences after degapping: '+str(len(MSA_degapped)))
 
-    if args.group:
-        seq_dict = {}
-        for entry in MSA_degapped:
-            if str(entry.seq) in seq_dict.keys():
-                seq_dict[str(entry.seq)].append(entry)
-            else:
-                seq_dict[str(entry.seq)]=[entry]
+	if args.group:
+		seq_dict = {}
+		for entry in MSA_degapped:
+			if str(entry.seq) in seq_dict.keys():
+				seq_dict[str(entry.seq)].append(entry)
+			else:
+				seq_dict[str(entry.seq)]=[entry]
             
-        #generate training/testing/validation datasets\
-        logger.info('Generating training/testing/validation datasets after grouping identical sequences')
-        MSA_training =[]
-        MSA_testing =[]
-        MSA_validation =[]
-        entries= list(seq_dict.keys())
-        random.shuffle(entries)
-        for x in entries:
-            rand = random.random()
-            if rand<=0.7:
-                MSA_training=MSA_train+seq_dict[x]
-            elif rand<=0.8:
-                MSA_validation=MSA_validation+seq_dict[x]
-            else:
-                #assign 20% to testing set
-                MSA_testing=MSA_testing+seq_dict[x]
+		#generate training/testing/validation datasets\
+		logger.info('Generating training/testing/validation datasets after grouping identical sequences')
+		MSA_training =[]
+		MSA_testing =[]
+		MSA_validation =[]
+		entries= list(seq_dict.keys())
+		random.shuffle(entries)
+		for x in entries:
+			rand = random.random()
+			if rand<=0.7:
+				#assign 70% to training set
+				MSA_training=MSA_train+seq_dict[x]
+			elif rand<=0.8:
+				#assign 10% to validation set
+				MSA_validation=MSA_validation+seq_dict[x]
+			else:
+				#assign 20% to testing set
+				MSA_testing=MSA_testing+seq_dict[x]
 
-    else:
-        #generate training/testing/validation datasets\
-        logger.info('Generating training/testing/validation datasets without grouping sequences')
-        MSA_training =[]
-        MSA_testing =[]
-        MSA_validation =[]
-        for x in MSA_degapped:
-            rand = random.random()
-            if rand<=0.7:
-                MSA_training.append(x)
-            elif rand<=0.8:
-                MSA_validation.append(x)
-            else:
-                #assign 20% to testing set
-                MSA_testing.append(x)	
+	else:
+		#generate training/testing/validation datasets\
+		logger.info('Generating training/testing/validation datasets without grouping sequences')
+		MSA_training =[]
+		MSA_testing =[]
+		MSA_validation =[]
+		for x in MSA_degapped:
+			rand = random.random()
+			if rand<=0.7:
+				#assign 70% to training set
+				MSA_training.append(x)
+			elif rand<=0.8:
+				#assign 10% to validation set
+				MSA_validation.append(x)
+			else:
+				#assign 20% to testing set
+				MSA_testing.append(x)	
 
 	MSA_training=MultipleSeqAlignment(MSA_training)
 	Bio.AlignIO.write(MSA_training, MSA_file.split('.')[0]+"_training.fa", "fasta")
