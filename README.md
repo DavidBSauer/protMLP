@@ -16,7 +16,7 @@ These scripts depend upon Python3 with the following python packages also instal
 
 To install everything in Ubuntu (or other system that use the apt package manager), go into the downloaded directory and use the pre-made bash script. 
 ```
-cd OGT_prediction
+cd protMLP
 ./Ubuntu_setup.bash
 ```
 
