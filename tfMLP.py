@@ -124,16 +124,18 @@ def trainer(input):
 		model = build_model_linear()
 
 	early_stop = keras.callbacks.EarlyStopping(monitor='val_loss', patience=2)
-	history = model.fit(train_data, train_target, epochs=max_iter,batch_size=batch_size, shuffle=True,validation_data = (valid_data,valid_target), verbose=0, callbacks=[early_stop])	
+	checkpoint = keras.callbacks.ModelCheckpoint(folder+'/model.h5',monitor='val_loss',mode='min',save_best_only=True,verbose=0,save_freq='epoch')
+	history = model.fit(train_data, train_target, epochs=max_iter,batch_size=batch_size, shuffle=True,validation_data = (valid_data,valid_target), verbose=0, callbacks=[early_stop,checkpoint])	
 	
 	#predict the final results
+	del(model)
+	keras.backend.clear_session()
+	model = keras.models.load_model(folder+'/model.h5')
 	valid_pred = model.predict(valid_data).flatten()
 
 	MSE = np.mean((valid_pred - valid_target.values) ** 2)
 	RMSE = math.sqrt(MSE)
 	r = pearsonr(valid_target.values,valid_pred)[0]
-
-	model.save(folder+'/model.h5')
 	del(model)
 	
 	return {'NN':NN,'MSE':MSE,'RMSE':RMSE,'r':r,'data_param':data_param}
