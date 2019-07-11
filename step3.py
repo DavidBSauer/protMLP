@@ -274,9 +274,9 @@ elif len(population)>0:
 		print('Training generation: 0')
 		#train
 		results = [MLP.trainer((NN,'ReLu')) for NN in tqdm(population,unit='MLP')]
-		all_results_relu = results
+		all_results_relu.append(results)
 		if identity:
-			all_results_ident = [MLP.trainer((NN,'Identity')) for NN in tqdm(population,unit='MLP')]
+			all_results_ident.append([MLP.trainer((NN,'Identity')) for NN in tqdm(population,unit='MLP')])
 		sorted_results = sorted(results, key=lambda k: k['MSE'])
 		best = sorted_results[0]
 		#move best MLP
@@ -301,9 +301,9 @@ elif len(population)>0:
 			population = random.sample(population,min([len(population),max_num]))
 			#train
 			results = [MLP.trainer((NN,'ReLu')) for NN in tqdm(population,unit='MLP')]
-			all_results_relu = all_results_relu+results
+			all_results_relu.append(results)
 			if identity:
-				all_results_ident = all_results_ident+[MLP.trainer((NN,'Identity')) for NN in tqdm(population,unit='MLP')]
+				all_results_ident.append([MLP.trainer((NN,'Identity')) for NN in tqdm(population,unit='MLP')])
 			sorted_results = sorted(results, key=lambda k: k['MSE'])
 
 			#find the new best if it exists
@@ -339,6 +339,64 @@ elif len(population)>0:
 	logger.info('Network of topology: '+'-'.join([str(y) for y in best['NN']])+' gives test MSE of: '+str(result['MSE'])+', RMSE of: '+str(result['RMSE'])+', r-value:'+str(result['r']))
 	logger.info('Equations (sequences) to unknowns (connections) ratio: '+str(result['data_param']))
 
+	#plot r's by generation
+	all_relu_rs = []
+	all_ident_rs = []
+	generation = []
+	for y in range(0,len(all_results_relu),1):
+		all_relu_rs = all_relu_rs + [x['r'] for x in all_results_relu[y]]
+		generation = generation+ [y]*len(all_results_relu[y])
+		if identity:
+			all_ident_rs = all_ident_rs + [x['r'] for x in all_results_ident[y]]
+	plt.axhline(y=lin['r'],color='black')
+	if identity:
+		plt.plot(generation,all_ident_rs,'.',label='Identity',markersize=14,alpha=0.6)
+	plt.plot(generation,all_relu_rs,'.',label='ReLu',markersize=14,alpha=0.6)
+	plt.xlim(-1,generation[-1]+1)
+	plt.ylim(0.8*min(all_relu_rs+all_ident_rs+[lin['r']]),1.2*max(all_relu_rs+all_ident_rs+[lin['r']]))
+	plt.grid()
+	plt.xlabel('Generation')
+	plt.ylabel('r of Validation Data')
+	plt.legend()
+	plt.savefig('./results/MLP_r_vs_generation.png')
+	plt.cla()
+	plt.clf()
+	plt.close()	
+
+
+	#plot mse by generation
+	all_relu_mses = []
+	all_ident_mses = []
+	for y in range(0,len(all_results_relu),1):
+		all_relu_mses = all_relu_mses + [x['MSE'] for x in all_results_relu[y]]
+		if identity:
+			all_ident_mses = all_ident_mses + [x['MSE'] for x in all_results_ident[y]]
+	plt.axhline(y=lin['MSE'],color='black')
+	if identity:
+		plt.plot(generation,all_ident_mses,'.',label='Identity',markersize=14,alpha=0.6)
+	plt.plot(generation,all_relu_mses,'.',label='ReLu',markersize=14,alpha=0.6)
+	plt.xlim(-1,generation[-1]+1)
+	plt.ylim(0.8*min(all_relu_mses+all_ident_mses+[lin['MSE']]),1.2*max(all_relu_mses+all_ident_mses+[lin['MSE']]))
+	plt.grid()
+	plt.xlabel('Generation')
+	plt.ylabel('MSE of Validation Data')
+	plt.legend()
+	plt.savefig('./results/MLP_MSE_vs_generation.png')
+	plt.cla()
+	plt.clf()
+	plt.close()	
+
+
+	#unroll results for plotting
+	temp_relu = []
+	temp_ident = []
+	for y in range(0,len(all_results_relu),1):
+		temp_relu = temp_relu + all_results_relu[y]
+		if identity:
+			temp_ident = temp_ident + all_results_ident[y]
+	all_results_relu = temp_relu
+	all_results_ident = temp_ident
+
 	#record the accuracies for all examined topologies
 	for x in range(0,len(all_results_relu),1):
 		net = '-'.join([str(x) for x in all_results_relu[x]['NN']])
@@ -358,7 +416,7 @@ elif len(population)>0:
 	plt.ylim(0.5*min([x['MSE'] for x in all_results_relu]+[x['MSE'] for x in all_results_ident]),lin['MSE']+1)
 	plt.grid()
 	plt.xlabel('Number of Connections')
-	plt.ylabel('MSE of Test Data')
+	plt.ylabel('MSE of Validation Data')
 	plt.legend()
 	plt.savefig('./results/MLP_MSE_vs_Connection.png')
 	plt.cla()
@@ -374,7 +432,7 @@ elif len(population)>0:
 	plt.ylim(0.5*min([x['MSE'] for x in all_results_relu]+[x['MSE'] for x in all_results_ident]),lin['MSE']+1)
 	plt.grid()
 	plt.xlabel('Number of Layers')
-	plt.ylabel('MSE of Test Data')
+	plt.ylabel('MSE of Validation Data')
 	plt.legend()
 	plt.savefig('./results/MLP_MSE_vs_Layers.png')
 	plt.cla()
@@ -390,7 +448,7 @@ elif len(population)>0:
 	plt.ylim(0.5*min([x['MSE'] for x in all_results_relu]+[x['MSE'] for x in all_results_ident]),lin['MSE']+1)
 	plt.grid()
 	plt.xlabel('Max Layer Width')
-	plt.ylabel('MSE of Test Data')
+	plt.ylabel('MSE of Validation Data')
 	plt.legend()
 	plt.savefig('./results/MLP_MSE_vs_Width.png')
 	plt.cla()
@@ -406,7 +464,7 @@ elif len(population)>0:
 	plt.ylim(0.5*min([x['MSE'] for x in all_results_relu]+[x['MSE'] for x in all_results_ident]),lin['MSE']+1)
 	plt.grid()
 	plt.xlabel('Overdetermination')
-	plt.ylabel('MSE of Test Data')
+	plt.ylabel('MSE of Validation Data')
 	plt.legend()
 	plt.savefig('./results/MLP_MSE_vs_overdetermination.png')
 	plt.cla()
@@ -450,7 +508,7 @@ elif len(population)>0:
 	plt.hist(mses_relu,hist_range,density=False,label='ReLu',alpha=0.6)
 	plt.tick_params(axis='x', which='both',bottom=True,top=False)
 	plt.legend()
-	plt.xlabel("Trained MLPs MSE")
+	plt.xlabel("Trained MLPs Validation MSE")
 	plt.ylabel('Count')
 	if len(mses_relu)>20:
 		if identity:
@@ -483,7 +541,7 @@ elif len(population)>0:
 	plt.hist(rs_relu,hist_range,density=False,label='ReLu',alpha=0.6)
 	plt.tick_params(axis='x', which='both',bottom=True,top=False)
 	plt.legend()
-	plt.xlabel("Trained MLPs r-values")
+	plt.xlabel("Trained MLPs Validation r-values")
 	plt.ylabel('Count')
 	if len(rs_relu)>20:
 		if identity:
