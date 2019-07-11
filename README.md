@@ -56,7 +56,9 @@ python3 predictor.py -s sequences.fa -t NN_AA_template.txt -m model.h5 -p
 ```
 
 ## Predict Tg of point mutants to a provided sequence
-Given a provided protein sequence, predict the Tg of all possible amino acids observed at each position of the training MSA. Note, can predict compound (double, triple, etc) mutants also. However, mutational space increase exponentially with the number of mutations, therefore requiring exponentially more CPU-time and memory to calculate. If the program crashes, try decreasing the batch size.
+Given a provided protein sequence, predict the Tg of all possible amino acids observed at each position of the training MSA. 
+
+Note, this program can predict compound (double, triple, etc) mutants also. However, mutational space increase exponentially with the number of mutations, therefore requiring exponentially more CPU-time and memory to calculate. If the program crashes, try decreasing the batch size.
 
 ```
 python3 point_mutant_screening.py -s sequences.fa -t NN_AA_template.txt -m model.h5 -p -n 1
