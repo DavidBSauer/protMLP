@@ -36,7 +36,7 @@ def comparison(my_input):
 	
 	fig, ax = plt.subplots(nrows=1,ncols=1)
 	ax.set_xlabel('Reported Species Tg (C)')
-	ax.set_ylabel('Boolean probability of '+name)
+	ax.set_ylabel('Boolean presence of '+name)
 	ax.set_yticks([0,1])
 	ax.set_yticklabels(['False','True'])
 	if not(best['r'] == None):
