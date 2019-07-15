@@ -46,7 +46,7 @@ def comparison(my_input):
 		target,values,preds = zip(*sorted(zip(target,values,preds)))
 		ax.plot(target,preds,'-',rasterized=True,markersize=14,alpha=0.6)
 	ax.plot(target,values,'.',rasterized=True,markersize=14,alpha=0.6)
-	ax.set_title('Boolean probability of '+name+' vs Tg\nBP r= '+format(best['r'],'.3f'))
+	ax.set_title('Boolean presence of '+name+' vs Tg\nBP r= '+format(best['r'],'.3f'))
 	plt.savefig('./results/positional_correlations/'+name+'_correlation.png')
 	plt.cla()
 	plt.clf()
