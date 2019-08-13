@@ -128,7 +128,7 @@ for MSA_file in MSA_files.keys():
 			rand = random.random()
 			if rand<=0.7:
 				#assign 70% to training set
-				MSA_training=MSA_train+seq_dict[x]
+				MSA_training=MSA_trainint+seq_dict[x]
 			elif rand<=0.8:
 				#assign 10% to validation set
 				MSA_validation=MSA_validation+seq_dict[x]
