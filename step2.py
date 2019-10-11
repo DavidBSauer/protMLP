@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-#take in an MSA and assign OGTs, keeping only those in the desired range
+#take in an MSA and assign traits, keeping only those in the desired range
 
 import logging
 logger = logging.getLogger('ranging_sequences')
@@ -24,26 +24,26 @@ import argparse
 
 def_range = 'all'
 
-parser = argparse.ArgumentParser(description="Step 2. Take in a species-Tg file and MSA files. Assign Tg's to all sequences based on assigned species, then remove sequences outside of provided Tg range.")
+parser = argparse.ArgumentParser(description="Step 2. Take in a species-trait file and MSA files. Assign trait's to all sequences based on assigned species, then remove sequences outside of provided trait range.")
 files = parser.add_argument_group('Required files')
-files.add_argument("-t",action='store', type=str, help="The species-Tg file.",dest='ogt',default=None)
+files.add_argument("-t",action='store', type=str, help="The species-trait file.",dest='trait',default=None)
 files.add_argument("-s","--seq",action='append', type=str, help="The MSA file in FASTA format.",dest='MSA_file',default=None)
-parser.add_argument("-r", "--range",action='store', type=str, help="The range of Tg's to keep. Can be 'all', some combination of p/m/t for psychrophiles, mesophile, or thermophiles. Or a given range of temperatures, with '-' denoting ranges and ',' for multiple ranges. Examples: 'mt' or '25-35,45-65'. Default is "+str(def_range)+'.',dest='range',default=def_range)
+parser.add_argument("-r", "--range",action='store', type=str, help="The range of traits's to keep. Can be 'all', some combination of p/m/t for psychrophiles, mesophile, or thermophiles (probably only relevant when considering Tg's). Or a given range, with 'to' denoting ranges and ',' for multiple ranges. Examples: 'mt' or '-25to35,45to65'. Default is "+str(def_range)+'.',dest='range',default=def_range)
 
 args = parser.parse_args()
 data_range = args.range
 
 try:
 	#read in species-OGT file
-	logger.info("Species-Tg file: "+args.ogt)
-	infile = open(args.ogt,'r')
+	logger.info("Species-trait file: "+args.trait)
+	infile = open(args.trait,'r')
 	reader = csv.reader(infile,delimiter='\t')
 	species_temp = dict((str(rows[0]),float(rows[1])) for rows in reader)
 	infile.close()    
-	logger.info("found "+str(len(species_temp.keys()))+" species-Tg pairs")
+	logger.info("found "+str(len(species_temp.keys()))+" species-trait pairs")
 except:
-	logger.info("Problem reading the species-Tg file. Quitting")
-	print("Problem reading the species-Tg file. Quitting")
+	logger.info("Problem reading the species-trait file. Quitting")
+	print("Problem reading the species-trait file. Quitting")
 	sys.exit()
 else:
 	pass
@@ -86,9 +86,9 @@ if not(all_ogt):
 		thermo = True
 
 if not(all_ogt or psych or meso or thermo):
-	OGT_range = [(float(subrange.split('-')[0]),float(subrange.split('-')[1])) for subrange in data_range.split(',')]
+	OGT_range = [(float(subrange.split('to')[0]),float(subrange.split('to')[1])) for subrange in data_range.split(',')]
 
-logger.info('Including sequences within the Tg ranges of: '+', '.join([' to '.join([str(y) for y in x]) for x in OGT_range]))
+logger.info('Including sequences within the trait ranges of: '+', '.join([' to '.join([str(y) for y in x]) for x in OGT_range]))
 
 #assign temp to each sequence based on species
 def spec(txt):
@@ -101,11 +101,11 @@ for file in files.keys():
 	MSA_file = files[file]
 	logger.info('Number of sequences in the MSA: '+str(len(MSA_file)))
 	assigned = []
-	logger.info("Assigning Tg's to sequences for MSA")
+	logger.info("Assigning traits to sequences for MSA")
 	for x in MSA_file:
 		if spec(x.id) in species_temp.keys():
 			assigned.append(SeqRecord(Seq(str(x.seq),x.seq.alphabet), x.id+'|'+str(species_temp[spec(x.id)]),'',''))
-	logger.info('Number of sequences with assigned Tg: '+str(len(assigned)))				
+	logger.info('Number of sequences with assigned traits: '+str(len(assigned)))				
 	MSA_file= MultipleSeqAlignment(assigned)
 	AlignIO.write(MSA_file,file.split('.')[0]+"_assigned.fa", "fasta")
 
@@ -115,7 +115,7 @@ for file in files.keys():
 		return float(b)
 
 	#retain only those sequences within the desired OGT range
-	logger.info("Retaining only those Tg's in range")
+	logger.info("Retaining only those sequences with trait in desired range")
 	in_range = []
 	for x in MSA_file:
 		for ranges in OGT_range:

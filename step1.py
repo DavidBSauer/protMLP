@@ -87,6 +87,7 @@ for MSA_file in MSA_files.keys():
 	MSA_Xed = cleanup.removeXs(MSA)
 	Bio.AlignIO.write(MSA_Xed,MSA_file.split('.')[0]+"_Xed.fa", "fasta")
 	del MSA
+	
 	logger.info('Sequences without X\'s or other non-cannonical AAs: '+str(len(MSA_Xed)))
 	logger.info('Creating non-redundant names')
 	MSA_nonredundant = cleanup.rendundant_names(MSA_Xed)
@@ -94,18 +95,20 @@ for MSA_file in MSA_files.keys():
 	del MSA_Xed
 
 	#retain only those sequences with species, non-fragment
-	logger.info('Finding non-fragement sequences with species')	
-	MSA_assigned = getter.non_frag_spec(MSA_nonredundant)
+	logger.info('Finding sequences with species')	
+	MSA_species = getter.spec(MSA_nonredundant)
+	logger.info('Sequences with species assigned: '+str(len(MSA_species)))
+	Bio.AlignIO.write(MSA_nonredundant,MSA_file.split('.')[0]+"_assigned_species.fa", "fasta")
 	del MSA_nonredundant
-	logger.info('Non-fragment sequences, with species information: '+str(len(MSA_assigned)))
-	species_list = list(set([x.id.split('|')[-1] for x in MSA_assigned]))
-	f = open(MSA_file.split('.')[0]+'_assigned_species.txt','w')
-	f.write('\n'.join(species_list))
-	f.close()
+	
+	logger.info('Removing sequence fragments')	
+	MSA_nonfrag = getter.non_frag(MSA_species)
+	logger.info('Non-fragment sequences: '+str(len(MSA_nonfrag)))
+	del MSA_species
 
 	#remove gap inducing sequences which are deleterious to data-parameter ratio
 	logger.info('Removing sequences which cause gaps at a frequency greater than '+str(threshold))
-	MSA_degapped = cleanup.gaps(MSA_assigned,threshold)
+	MSA_degapped = cleanup.gaps(MSA_nonfrag,threshold)
 	Bio.AlignIO.write(MSA_degapped,MSA_file.split('.')[0]+"_degapped.fa", "fasta")
 	logger.info('Sequences after degapping: '+str(len(MSA_degapped)))
 
@@ -128,7 +131,7 @@ for MSA_file in MSA_files.keys():
 			rand = random.random()
 			if rand<=0.7:
 				#assign 70% to training set
-				MSA_training=MSA_trainint+seq_dict[x]
+				MSA_training=MSA_training+seq_dict[x]
 			elif rand<=0.8:
 				#assign 10% to validation set
 				MSA_validation=MSA_validation+seq_dict[x]

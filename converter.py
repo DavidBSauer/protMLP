@@ -61,7 +61,7 @@ def convert(inputs):
 	full_vector = [False]*(length*21)
 	for pos in range(0,length,1):
 		full_vector[pos*21+AA_dict[working_AA_sequence[pos]]]=True
-	return (AA_sequence.id,full_vector+[temp(AA_sequence.id)])
+	return (AA_sequence.id,full_vector,temp(AA_sequence.id))
 		
 def convert_no_temp(inputs):
 	"""One-hot encode sequence without including a reported Tg"""
@@ -73,7 +73,7 @@ def convert_no_temp(inputs):
 	return (AA_sequence.id,full_vector)
 
 
-def convert_to_pd(files,parallel):
+def convert_to_pd(files,parallel,efficient):
 	"""Convert an MSA to a Pandas dataframe of one-hot encoded sequences"""
 	#plot heatmaps of MSAs
 	to_plot = [(key,files[key]) for key in ['train','test','valid']]
@@ -92,7 +92,7 @@ def convert_to_pd(files,parallel):
 	tr_num = float(len(files['train']))
 
 	#calculate a non-binary AA_vector reference
-	ref = np.array([y+str(x) for x in range(1,length+1,1) for y in AAs]+['target'])
+	ref = np.array([y+str(x) for x in range(1,length+1,1) for y in AAs])
 
 	all_pd_data = {x:None for x in files.keys()}
 	for file in files.keys():
@@ -108,8 +108,13 @@ def convert_to_pd(files,parallel):
 			results = map(convert,to_convert)
 		results = list(results)
 		random.shuffle(results)
-		all_pd_data[file]=pd.DataFrame(data=np.array([x[1] for x in results],dtype='float32'),columns =ref) 
+		if efficient:
+			all_pd_data[file]=pd.DataFrame(data=np.array([x[1] for x in results],dtype='uint8'),columns =ref) 
+		else:
+			all_pd_data[file]=pd.DataFrame(data=np.array([x[1] for x in results],dtype='float32'),columns =ref) 
 		all_pd_data[file]=all_pd_data[file].assign(id = [x[0] for x in results])
+		all_pd_data[file]=all_pd_data[file].assign(target = [x[-1] for x in results])
+
 		#all_pd_data[file].to_csv('./results/'+file+'_raw_encoded_alignment.csv',index=False)
 			
 	#remove unseen positions in the binary alignments
@@ -125,7 +130,8 @@ def convert_to_pd(files,parallel):
 		f.write(pos+'\n')
 	f.close()
 
-	logger.info('After removing invariant columns, the alignment length is: '+str(len(ref)-len(to_remove)-1))
+	logger.info('After removing invariant columns, the one-hot alignment length is: '+str(len(ref)-len(to_remove)-1))
+	logger.info('Training sequences per one-hot encoded length: '+str(len(files['train'])/(len(ref)-len(to_remove)-1)))
 	
 	return all_pd_data
 	

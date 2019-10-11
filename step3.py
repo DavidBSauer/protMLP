@@ -35,7 +35,10 @@ import argparse
 from Bio.Align import MultipleSeqAlignment
 import tfMLP as MLP
 from scipy.stats import wilcoxon
+from scipy.stats import chisquare
 import networks
+import identity as identity_calc
+
 
 #defaults
 overdetermined_level =1
@@ -49,6 +52,10 @@ parallel = False
 max_layer = float('inf')
 identity = False
 to_keep = 0.2
+unique = False
+identity_test = False
+unit = 'Tg'
+efficient = False
 
 parser = argparse.ArgumentParser(description='Step 3. One-hot encode the protein sequences. Optionally remove less significant columns and/or rebalance the data. Calculate a linear regression and all possible MLPs.')
 parser.add_argument("-tr","--train",action='store', type=str, help="The MSA training file in FASTA format.",dest='train_file',default=None)
@@ -66,6 +73,10 @@ parser.add_argument("-p", "--parallel",help="Run parallel where-ever possible. A
 parser.add_argument("-g", "--generations",type=int,help="Number of generations to run the genetic algorithm. Default is "+str(G),dest='G',default=G)
 parser.add_argument("-k", "--keep",type=float,help="Fraction of the MLPs to keep every generation. Default is "+str(to_keep),dest='to_keep',default=to_keep)
 parser.add_argument("-i", "--identity",help="Train regressions with an identity activation function for comparison. Default is "+str(identity),action="store_true",dest='identity',default=identity)
+parser.add_argument("-uo", "--unique_overdetermined",help="Use the number of unique training sequences in calculating the overdetermined level. Default is "+str(unique),action="store_true",dest='unique',default=unique)
+parser.add_argument("-ti", "--train_identity",help="Compare the test prediction residual versus maximum identity to the training dataset. Default is "+str(identity_test),action="store_true",dest='identity_test',default=identity_test)
+parser.add_argument("-u", "--unit",help="Description/unit for the regression target. Default is "+str(unit),action="store",dest='unit',default=unit)
+parser.add_argument("-e", "--efficient",help="Use unsigned 8-bit intergers for the one-hot encoded protein sequence, rather than standard 32-bit floats. This will reduced memory use ~75%. Default is "+str(efficient),action="store_true",dest='efficient',default=efficient)
 
 
 args = parser.parse_args()
@@ -83,8 +94,13 @@ max_layer = args.max_layer
 G = args.G
 to_keep = args.to_keep
 identity = args.identity
+unique = args.unique
+identity_test = args.identity_test
+unit = args.unit
+efficient = args.efficient
 
 #log the run parameters
+logger.info('Description/unit of the regression target: '+str(unit))
 logger.info('Fold Overdetermined: '+str(overdetermined_level))
 logger.info('Maximum MLP depth: '+str(max_depth))
 logger.info('Maximum number of MLPs per generation: '+str(max_num))
@@ -99,6 +115,9 @@ logger.info('Training MLP with identity activation function: '+str(identity))
 logger.info('The training file is: '+str(training_file))
 logger.info('The test file is: '+str(testing_file))
 logger.info('The validation file is: '+str(val_file))
+logger.info('Use unique training sequences to calculate overdetermined level: '+str(unique))
+logger.info('Calculate the pairwise percent identity versus difference in '+unit+' between the training and test sets: '+str(identity_test))
+logger.info('Use unsigned 8-bit intergers for the one hot encoded sequence: '+str(efficient))
 
 files = {}
 for file in [('train',training_file),('test',testing_file),('valid',val_file)]:
@@ -132,6 +151,18 @@ training_seqs = len(files['train'])
 logger.info('Training sequences: '+str(training_seqs))
 logger.info('Test sequences: '+str(len(files['test'])))
 logger.info('Validation sequences: '+str(len(files['valid'])))
+refs = set([x.seq for x in files['train']]+[x.seq for x in files['valid']])
+logger.info('Number of test sequences in the train or validation datasets: '+str(len([y.seq for y in files['test'] if y.seq in refs])))
+logger.info('Unique training sequences: '+str(len(set([x.seq for x in files['train']]))))
+logger.info('Unique test sequences: '+str(len(set([x.seq for x in files['test']]))))
+logger.info('Unique validation sequences: '+str(len(set([x.seq for x in files['valid']]))))
+logger.info('Number of unique test sequences in the train or validation datasets: '+str(len(set([y.seq for y in files['test'] if y.seq in refs]))))
+del(refs)
+
+if unique:
+	logger.info('Using the number of unique training sequences in calculating the overdetermined level')
+	training_seqs = len(set([x.seq for x in files['train']]))
+
 
 #some basic information about the input sequences
 logger.info('Alignment length: '+str(length))
@@ -160,23 +191,26 @@ for y in range(0,length,1):
 
 #convert the MSAs to binary lists of AA sequences (excluding invariant positions)
 logger.info('One-hot encoding the protein sequences')
-onehot_data = converter.convert_to_pd(files,parallel)
-logger.info('The mean training Tg: '+str(np.mean(onehot_data['train']['target'])))
+onehot_data = converter.convert_to_pd(files,parallel,efficient)
+logger.info('The mean training '+unit+': '+str(np.mean(onehot_data['train']['target'])))
 
 #calculate biserial r-values only if threshold given
-if not(th_threshold==None): 
-	onehot_data = tophat.calc(th_threshold,onehot_data,parallel)
+if not(th_threshold == None): 
+	onehot_data = tophat.calc(th_threshold,onehot_data,parallel,unit)
 elif not(bs_threshold == None):
-	onehot_data = biserial.biserial(bs_threshold,onehot_data,parallel)
+	onehot_data = biserial.biserial(bs_threshold,onehot_data,parallel,unit)
 
 #make a figure of OGT values
 n,bins,patches=plt.hist(onehot_data['train']['target'],50,density=False,label='Training')
+chi_sq = chisquare(n)[0]
+logger.info('The chi-square of the '+unit+' distribution versus equal values across all 50 bins: '+str(chi_sq))
 plt.hist(onehot_data['test']['target'],bins,density=False,label='Testing')
 plt.hist(onehot_data['valid']['target'],bins,density=False,label='Validation')
 plt.legend()
-plt.xlabel('Tg values')
+plt.title('Chi_sq = '+str(chi_sq))
+plt.xlabel(unit+' values')
 plt.ylabel('Number of Sequences')
-plt.savefig('./results/Tg_histogram.png')
+plt.savefig('./results/'+unit+'_histogram.png')
 plt.cla()
 plt.clf()
 plt.close()
@@ -187,9 +221,10 @@ plt.hist(onehot_data['test']['target'],bins,density=False,label='Testing')
 plt.hist(onehot_data['valid']['target'],bins,density=False,label='Validation')
 plt.yscale('log')
 plt.legend()
-plt.xlabel('Tg values')
+plt.title('Chi_sq = '+str(chi_sq))
+plt.xlabel(unit+' values')
 plt.ylabel('Number of Sequences')
-plt.savefig('./results/Tg_histogram_log.png')
+plt.savefig('./results/'+unit+'_histogram_log.png')
 plt.cla()
 plt.clf()
 plt.close()
@@ -202,9 +237,9 @@ if balanced:
 	plt.hist(onehot_data['test']['target'],bins,density=False,label='Testing')
 	plt.hist(onehot_data['valid']['target'],bins,density=False,label='Validation')
 	plt.legend()
-	plt.xlabel('Tg values')
+	plt.xlabel(unit+' values')
 	plt.ylabel('Number of Sequences')
-	plt.savefig('./results/Tg_histogram_balanced.png')
+	plt.savefig('./results/'+unit+'_histogram_balanced.png')
 	plt.cla()
 	plt.clf()
 	plt.close()
@@ -215,15 +250,15 @@ if balanced:
 	plt.hist(onehot_data['valid']['target'],bins,density=False,label='Validation')
 	plt.yscale('log')
 	plt.legend()
-	plt.xlabel('Tg values')
+	plt.xlabel(unit+' values')
 	plt.ylabel('Number of Sequences')
-	plt.savefig('./results/Tg_histogram_balanced_log.png')
+	plt.savefig('./results/'+unit+'_histogram_balanced_log.png')
 	plt.cla()
 	plt.clf()
 	plt.close()
 
 	logger.info('Number of training sequences after balancing: '+str(onehot_data['train']['target'].shape[0]))
-	logger.info('The mean training Tg after balancing: '+str(np.mean(onehot_data['train']['target'])))
+	logger.info('The mean training '+unit+' after balancing: '+str(np.mean(onehot_data['train']['target'])))
 
 
 logger.info('Training sequences minimum: '+str(onehot_data['train']['target'].min()))
@@ -235,27 +270,30 @@ logger.info('Validation sequences maximum: '+str(onehot_data['valid']['target'].
 logger.info('Total size of data (in MB): '+str((sum(onehot_data['train'].memory_usage())+sum(onehot_data['test'].memory_usage())+sum(onehot_data['valid'].memory_usage()))/(1024**2)))
 
 logger.info('Setting up common training parameters')
-MLP.setup(onehot_data)
+MLP.setup(onehot_data,unit)
 
-if (max_layer > 2*(onehot_data['train'].shape[1]-2)):
+n_input = onehot_data['train'].shape[1]-2
+
+if (max_layer > 2*(n_input)):
 	logger.info('Limiting the layer width based on the width of the input layer')
-	max_layer = 2*(onehot_data['train'].shape[1]-2)
+	max_layer = 2*n_input
 	logger.info('New maximum number of nodes per layer: '+str(max_layer))
 
 logger.info('Maximum number of nodes in a layer: '+str(max_layer))
 
 #find all valid NNs
 logger.info('Building out MLP topologies to train')
-(brute,population)= networks.builder(G,max_num,max_depth,overdetermined_level,training_seqs,max_layer,parallel)
+(brute,population)= networks.builder(G,max_num,max_depth,overdetermined_level,n_input,training_seqs,max_layer,parallel)
 
 logger.info('Calculating linear regression')
 #run linear regression
 if (onehot_data['train'].shape[1]-1)>onehot_data['train'].shape[0]:
 	logger.info('Warning! Linear regression will be underdetermined. More values to fit than sequences in training set.')
 lin = MLP.trainer((None,'Linear'))
+logger.info('Linear regression gives validation MSE of: '+str(lin['MSE']))
 lin = MLP.final_eval((None,'Linear'))
 logger.info('Linear regression gives MSE of: '+str(lin['MSE'])+', RMSE of: '+str(lin['RMSE'])+', r-value: '+str(lin['r'])+', data/param: '+str(lin['data_param']))
-f = open('./results/NN_results.txt','w')
+f = open('./results/NN_results.tsv','w')
 f.write('Network\tLayers\tConnections\tdata/param\tMSE\tRMSE\tr-value')
 if identity:
 	f.write('\tident_MSE\tident_RMSE\tident_r\n')
@@ -311,8 +349,7 @@ elif len(population)>0:
 				best= sorted_results[0]
 				os.remove('./results/MLP_best/model.h5')
 				shutil.copyfile('./results/MLP_'+'-'.join([str(x) for x in best['NN']])+'/ReLu/model.h5', './results/MLP_best/model.h5')
-			logger.info('The best MLP of generation '+str(g)+' has a topology of '+'-'.join([str(x) for x in sorted_results[0]['NN']])+' training dataset MSE of '+str(sorted_results[0]['MSE']))
-			#logger.info('The best MLP overall has a topology of '+'-'.join([str(x) for x in best['NN']])+' training dataset MSE of '+str(best['MSE']))
+			logger.info('The best MLP of generation '+str(g)+' has a topology of '+'-'.join([str(x) for x in sorted_results[0]['NN']])+' validation dataset MSE of '+str(sorted_results[0]['MSE']))
 
 			#remove non-best MLPs
 			for nn in results:
@@ -338,6 +375,10 @@ elif len(population)>0:
 
 	logger.info('Network of topology: '+'-'.join([str(y) for y in best['NN']])+' gives test MSE of: '+str(result['MSE'])+', RMSE of: '+str(result['RMSE'])+', r-value:'+str(result['r']))
 	logger.info('Equations (sequences) to unknowns (connections) ratio: '+str(result['data_param']))
+
+	#calculate how accuracy scales with sequence similarity
+	if identity_test:
+		identity_calc.accuracy(files['train'],files['test'],result['residuals'],unit,parallel)
 
 	#plot r's by generation
 	all_relu_rs = []
@@ -488,7 +529,8 @@ elif len(population)>0:
 	if len(rmses_relu)>20:
 		if identity:
 			(t,p) = wilcoxon(rmses_relu,rmses_lin)
-			plt.title("Paired t-test p: "+str(p))
+			plt.title("Wilcoxon p: "+str(p))
+			logger.info('The Wilcoxon p-value of the RMSEs using a ReLu versus linear activation function: '+str(p))
 	plt.ylabel('Count')
 	plt.savefig('./results/MLP_RMSE_histogram.png')
 	plt.cla()
@@ -513,7 +555,8 @@ elif len(population)>0:
 	if len(mses_relu)>20:
 		if identity:
 			(t,p) = wilcoxon(mses_relu,mses_lin)
-			plt.title("Paired t-test p: "+str(p))
+			plt.title("Wilcoxon p: "+str(p))
+			logger.info('The Wilcoxon p-value of the MSEs using a ReLu versus linear activation function: '+str(p))
 	plt.savefig('./results/MLP_MSE_histogram.png')
 	plt.cla()
 	plt.clf()
@@ -546,7 +589,8 @@ elif len(population)>0:
 	if len(rs_relu)>20:
 		if identity:
 			(t,p) = wilcoxon(rs_relu,rs_lin)
-			plt.title("Paired t-test p: "+str(p))
+			plt.title("Wilcoxon p: "+str(p))
+			logger.info('The Wilcoxon p-value of the Pearson r-values using a ReLu versus linear activation function: '+str(p))
 	plt.savefig('./results/MLP_r_value_histogram.png')
 	plt.cla()
 	plt.clf()

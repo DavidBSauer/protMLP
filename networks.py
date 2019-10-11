@@ -11,7 +11,7 @@ overdetermined_level = 1
 training_seqs = 0
 parallel = False
 
-def builder(generations,num_per_generation,depth,level,train,layer,par):
+def builder(generations,num_per_generation,depth,level,n_input,train,layer,par):
 	"""Build MLP topologies based on maximum width, depth, overdetermined level"""
 	global max_depth 
 	max_depth = depth
@@ -46,6 +46,8 @@ def builder(generations,num_per_generation,depth,level,train,layer,par):
 		logger.info('Generating a random subset of MLPs')
 		if (training_seqs/(overdetermined_level*MLP.connections([2]))<1.0):
 			return(True,[])
+		max_layer = int(((training_seqs/overdetermined_level)-n_input*2-2)/3) #assuming the max is a two-layer network with 2 as the first layer
+		logger.info('The maximum number of nodes in any layer and still within the overdetermined level is: '+str(max_layer))
 		while len(NNs)<num_per_generation:
 			num_layers = random.randint(1,max_depth)
 			to_add =[]

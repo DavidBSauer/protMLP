@@ -38,8 +38,9 @@ logger.info('Batch size: '+str(batch_size))
 n_train_seq = None
 n_input = None
 seq_data = None
+unit = None
 	
-def setup(all_data):
+def setup(all_data,my_unit):
 	"""Set constant variables"""
 	global seq_data
 	seq_data = all_data
@@ -47,6 +48,9 @@ def setup(all_data):
 	global n_input	
 	(n_train_seq,n_input) = all_data['train'].shape
 	n_input = n_input-2
+	global unit
+	unit = my_unit
+	
 	
 def connections(model):
 	"""Calculate the number of parameters of a topology"""
@@ -178,19 +182,22 @@ def final_eval(input):
 	train_residuals = train_pred-train_target.values
 	valid_residuals = valid_pred-valid_target.values
 	test_residuals = test_pred-test_target.values
+	
+	test_resid_dict = {}
 
 	#record the results		
-	f = open(folder+'/train_results.txt','w')
+	f = open(folder+'/train_results.tsv','w')
 	f.write('sequence\ttarget_value\tpredicted_value\tresidual difference\n')
 	for x in train_ids.index.values:
 		f.write(train_ids.loc[x]+'\t'+str(train_target.loc[x])+'\t'+str(train_pred[x])+'\t'+str(train_residuals[x])+'\n')
 	f.close()
-	f = open(folder+'/test_results.txt','w')
+	f = open(folder+'/test_results.tsv','w')
 	f.write('sequence\ttarget_value\tpredicted_value\tresidual difference\n')
 	for x in test_ids.index.values:
 		f.write(test_ids.loc[x]+'\t'+str(test_target.loc[x])+'\t'+str(test_pred[x])+'\t'+str(test_residuals[x])+'\n')
+		test_resid_dict[test_ids.loc[x]] = test_residuals[x]
 	f.close()
-	f = open(folder+'/valid_results.txt','w')
+	f = open(folder+'/valid_results.tsv','w')
 	f.write('sequence\ttarget_value\tpredicted_value\tresidual difference\n')
 	for x in valid_ids.index.values:
 		f.write(valid_ids.loc[x]+'\t'+str(valid_target.loc[x])+'\t'+str(valid_pred[x])+'\t'+str(valid_residuals[x])+'\n')
@@ -212,8 +219,8 @@ def final_eval(input):
 	ax.set_ylim(minimum-5,maximum+5)
 	ax.set_xlim(minimum-5,maximum+5)
 	ax.plot(range(int(minimum*0.9)-1,int(maximum*1.1)+1,1),range(int(minimum*0.9)-1,int(maximum*1.1)+1,1),'--',linewidth=3,color='#566573',alpha=1)
-	ax.set_xlabel('Reported Species Tg (C)')
-	ax.set_ylabel('Predicted Species Tg (C)')
+	ax.set_xlabel('Reported '+unit)
+	ax.set_ylabel('Predicted '+unit)
 	#plot the training data
 	ax.plot(train_target.values,train_pred,'.',label='Training Set',rasterized=True,markersize=14,color='#222299',alpha=0.6)
 	#plot the valid data
@@ -242,8 +249,8 @@ def final_eval(input):
 		yrange = max(residuals)
 		ax.set_ylim(-1.1*yrange,1.1*yrange)
 		ax.plot(range(int(minimum*0.9)-1,int(maximum*1.1)+1,1),[0]*len(range(int(minimum*0.9)-1,int(maximum*1.1)+1,1)),'--',linewidth=3,color='#566573',alpha=1)
-		ax.set_xlabel('Reported Species Tg (C)')
-		ax.set_ylabel('Prediction residual (C)')
+		ax.set_xlabel('Reported '+unit)
+		ax.set_ylabel('Prediction '+unit)
 		#plot the training data
 		ax.plot(train_target.values,train_residuals,'.',label='Training Set',rasterized=True,markersize=14,color='#222299',alpha=0.6)
 		#plot the valid data
@@ -261,7 +268,7 @@ def final_eval(input):
 		plt.clf()
 		plt.close()
 
-	return {'NN':NN,'MSE':MSE,'RMSE':RMSE,'r':r,'data_param':data_param}
+	return {'NN':NN,'MSE':MSE,'RMSE':RMSE,'r':r,'data_param':data_param,'residuals':test_resid_dict}
 
 	
 def infer(model,data):

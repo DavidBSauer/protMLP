@@ -17,7 +17,7 @@ from scipy.optimize import minimize
 
 def comparison(my_input):
 	"""Fit the presence or absence of a particular AA to the top-hat function"""
-	(name,values,target) = my_input
+	(name,values,target,unit) = my_input
 	if len(list(set(values))) ==1:
 		#catch manually to avoid error messages
 		best = {'r':np.nan}
@@ -35,7 +35,7 @@ def comparison(my_input):
 				best ={'hat_mid':hat_mid,'hat_width':hat_width,'r':curr_r}
 	
 	fig, ax = plt.subplots(nrows=1,ncols=1)
-	ax.set_xlabel('Reported Species Tg (C)')
+	ax.set_xlabel(unit)
 	ax.set_ylabel('Boolean presence of '+name)
 	ax.set_yticks([0,1])
 	ax.set_yticklabels(['False','True'])
@@ -46,14 +46,14 @@ def comparison(my_input):
 		target,values,preds = zip(*sorted(zip(target,values,preds)))
 		ax.plot(target,preds,'-',rasterized=True,markersize=14,alpha=0.6)
 	ax.plot(target,values,'.',rasterized=True,markersize=14,alpha=0.6)
-	ax.set_title('Boolean presence of '+name+' vs Tg\nBP r= '+format(best['r'],'.3f'))
+	ax.set_title('Boolean presence of '+name+' vs '+unit+'\nBP r= '+format(best['r'],'.3f'))
 	plt.savefig('./results/positional_correlations/'+name+'_correlation.png')
 	plt.cla()
 	plt.clf()
 	plt.close()
 	return {'AA':name,'r':best['r']}
 
-def calc(threshold,all_data,parallel):
+def calc(threshold,all_data,parallel,unit):
 	"""Fit a top hat function to all positions of the one-hot encoded sequence"""
 	if not(os.path.isdir('./results/positional_correlations/')):
 		os.mkdir('./results/positional_correlations/')
@@ -61,7 +61,7 @@ def calc(threshold,all_data,parallel):
 	AA_ref = list(all_data['train'].columns)
 	AA_ref.remove('id')
 	AA_ref.remove('target')
-	to_analyze = [(pos,all_data['train'][pos].values,all_data['train']['target'].values) for pos in AA_ref]
+	to_analyze = [(pos,all_data['train'][pos].values,all_data['train']['target'].values,unit) for pos in AA_ref]
 
 	logger.info('Calculating tophat correlation coefficient.')
 	if parallel:
@@ -79,7 +79,7 @@ def calc(threshold,all_data,parallel):
 
 	#write out the results
 	sorted_rs = reversed(sorted(results_minus_nan, key=lambda dict_key: abs(results_minus_nan[dict_key])))
-	gg = open('./results/Sorted_positional_tophat_correlations.txt','w')
+	gg = open('./results/Sorted_positional_tophat_correlations.tsv','w')
 	gg.write('position\tr-value\n')
 	for x in sorted_rs:
 		gg.write(x+'\t'+str(results[x])+'\n')
@@ -128,7 +128,7 @@ def calc(threshold,all_data,parallel):
 	#plot r by pos
 	fig, ax = plt.subplots(nrows=1,ncols=1)
 	ax.set_xlabel('AA positions')
-	ax.set_ylabel('Biserial r-value')
+	ax.set_ylabel('Tophat r-value')
 	#add horizontal lines a bounds of threshold
 	if threshold > 0:
 		whole_range = range(positions.min()-10,positions.max()+10,1)

@@ -16,34 +16,34 @@ from matplotlib import cm
 
 def comparison(my_input):
 	"""Calculate individual positional biserial correlation of AA to Tg"""
-	(name,values,target) = my_input
+	(name,values,target,unit) = my_input
 	if len(list(set(values))) ==1:
 		#catch manually to avoid error messages
 		r = np.nan
 	else:
 		(r,p) = pointbiserialr(values, target)
 	fig, ax = plt.subplots(nrows=1,ncols=1)
-	ax.set_xlabel('Reported Species Tg (C)')
+	ax.set_xlabel(unit)
 	ax.set_ylabel('Boolean presence of '+name)
 	ax.set_yticks([0,1])
 	ax.set_yticklabels(['False','True'])
 	ax.plot(target,values,'.',rasterized=True,markersize=14,alpha=0.6)
-	ax.set_title('Boolean presence of '+name+' vs Tg\nBP r= '+format(r,'.3f'))
+	ax.set_title('Boolean presence of '+name+' vs '+unit+'\nBP r= '+format(r,'.3f'))
 	plt.savefig('./results/positional_correlations/'+name+'_correlation.png')
 	plt.cla()
 	plt.clf()
 	plt.close()
 	return {'AA':name,'r':r}
 
-def biserial(threshold,all_data,parallel):
-	"""Calculate positional biserial correlation of AA to Tg"""
+def biserial(threshold,all_data,parallel,unit):
+	"""Calculate positional biserial correlation of AA to trait"""
 	if not(os.path.isdir('./results/positional_correlations/')):
 		os.mkdir('./results/positional_correlations/')
 
 	AA_ref = list(all_data['train'].columns)
 	AA_ref.remove('id')
 	AA_ref.remove('target')
-	to_analyze = [(pos,all_data['train'][pos].values,all_data['train']['target'].values) for pos in AA_ref]
+	to_analyze = [(pos,all_data['train'][pos].values,all_data['train']['target'].values,unit) for pos in AA_ref]
 
 	logger.info('Calculating point-biserial correlation coefficient.')
 	if parallel:
@@ -61,7 +61,7 @@ def biserial(threshold,all_data,parallel):
 
 	#write out the results
 	sorted_rs = reversed(sorted(results_minus_nan, key=lambda dict_key: abs(results_minus_nan[dict_key])))
-	gg = open('./results/Sorted_positional_biserial_correlations.txt','w')
+	gg = open('./results/Sorted_positional_biserial_correlations.tsv','w')
 	gg.write('position\tr-value\n')
 	for x in sorted_rs:
 		gg.write(x+'\t'+str(results[x])+'\n')
