@@ -1,10 +1,8 @@
-#!/usr/bin/env python3
 import logging
 logger = logging.getLogger('MLP_training')
 from Bio.Align import MultipleSeqAlignment
 import numpy as np
 import random
-import pandas as pd
 
 bins = 20
 

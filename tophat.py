@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 #calculate the fit of a tophat function to AA distribution (one-hot encoded) vs OGT
 from scipy.stats import zscore, pearsonr
 import matplotlib.pyplot as plt
@@ -7,42 +6,43 @@ logger = logging.getLogger('MLP_training')
 import multiprocessing as mp
 import os
 import numpy as np
-from tqdm import tqdm
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from matplotlib import cm
 from scipy.optimize import minimize
+from tqdm import tqdm
+import math
 
+
+def eval(my_input):
+	(values,hat_mid,hat_width,target) = my_input
+	preds = np.where(hat_mid-hat_width/2<target,1,0) + np.where(target<hat_mid+hat_width/2,1,0)
+	preds = np.where(preds == 2, 1, 0)
+	#preds = [1 if hat_mid-hat_width/2<x<hat_mid+hat_width/2 else 0 for x in target]
+	curr_r = pearsonr(values,preds)[0]
+	return (abs(curr_r),hat_mid,hat_width,curr_r)
 
 def comparison(my_input):
 	"""Fit the presence or absence of a particular AA to the top-hat function"""
 	(name,values,target,unit) = my_input
-	if len(list(set(values))) ==1:
-		#catch manually to avoid error messages
-		best = {'r':np.nan}
-	else:
-		guesses = [(mid,width) for mid in range(int(min(target))-5,int(max(target))+5,1) for width in range(1,int(max(target)-min(target))+1,1)]
-		best ={'hat_mid':None,'hat_width':None,'r':np.nan}
-		for guess in guesses:
-			hat_mid = guess[0]
-			hat_width = guess[1]
-			preds = [1 if hat_mid-hat_width/2<x<hat_mid+hat_width/2 else 0 for x in target]
-			curr_r = pearsonr(values,preds)[0]
-			if abs(curr_r)>abs(best['r']):
-				best ={'hat_mid':hat_mid,'hat_width':hat_width,'r':curr_r}
-			elif np.isnan(best['r']):
-				best ={'hat_mid':hat_mid,'hat_width':hat_width,'r':curr_r}
-	
+	best ={'hat_mid':None,'hat_width':None,'r':np.nan}
 	fig, ax = plt.subplots(nrows=1,ncols=1)
 	ax.set_xlabel(unit)
 	ax.set_ylabel('Boolean presence of '+name)
 	ax.set_yticks([0,1])
 	ax.set_yticklabels(['False','True'])
-	if not(best['r'] == None):
+	if len(list(set(values))) > 1:
+		guesses = [(values,mid,width,target) for mid in np.linspace(min(target),max(target),num=100,endpoint=True) for width in np.linspace(0,max(target)-min(target),num=100,endpoint=True)]
+		results = map(eval,guesses)
+		results = list(results)
+		results.sort()
+		best ={'hat_mid':results[-1][1],'hat_width':results[-1][2],'r':results[-1][3]}
 		hat_width = best['hat_width']
 		hat_mid = best['hat_mid']
-		preds =[1 if hat_mid-hat_width/2<x<hat_mid+hat_width/2 else 0 for x in target]
+		preds = np.where(hat_mid-hat_width/2<target,1,0) + np.where(target<hat_mid+hat_width/2,1,0)
+		preds = np.where(preds == 2, 1, 0)
+		#preds =[1 if hat_mid-hat_width/2<x<hat_mid+hat_width/2 else 0 for x in target]
 		target,values,preds = zip(*sorted(zip(target,values,preds)))
 		ax.plot(target,preds,'-',rasterized=True,markersize=14,alpha=0.6)
 	ax.plot(target,values,'.',rasterized=True,markersize=14,alpha=0.6)
@@ -53,7 +53,7 @@ def comparison(my_input):
 	plt.close()
 	return {'AA':name,'r':best['r']}
 
-def calc(threshold,all_data,parallel,unit):
+def calc(threshold,all_data,threads,unit):
 	"""Fit a top hat function to all positions of the one-hot encoded sequence"""
 	if not(os.path.isdir('./results/positional_correlations/')):
 		os.mkdir('./results/positional_correlations/')
@@ -62,20 +62,27 @@ def calc(threshold,all_data,parallel,unit):
 	AA_ref.remove('id')
 	AA_ref.remove('target')
 	to_analyze = [(pos,all_data['train'][pos].values,all_data['train']['target'].values,unit) for pos in AA_ref]
-
+	print('Calculating tophat correlation coefficient.')
 	logger.info('Calculating tophat correlation coefficient.')
-	if parallel:
-		#multithread for performance
-		p = mp.Pool()
-		results = p.map(comparison,to_analyze)
-		p.close()
-		p.join()
-	else:
-		#single thread for trouble shooting
-		results = map(comparison,tqdm(to_analyze,unit='position'))
+	#multithread for performance
+	p = mp.Pool(threads)
+	results = p.map(comparison,to_analyze)
+	p.close()
+	p.join()
 	results = {x['AA']:x['r'] for x in results}
 	AA_ref_valid = [x for x in AA_ref if not(np.isnan(results[x]))]
 	results_minus_nan = {x:results[x] for x in AA_ref_valid}
+
+	logger.info('Before removing columns, the alignment length is: '+str(len(results.keys())))
+	#logger.info('Keeping columns from the MSA if abs(r-scores) >= '+str(threshold))
+	#valid_pos = [pos for pos in AA_ref_valid if abs(results[pos])>=threshold]
+	logger.info('Fraction of columns kept based on abs(r-scores): '+str(threshold))
+	valid_pos = [(pos,abs(results[pos])) for pos in AA_ref_valid]
+	valid_pos.sort(key=lambda x:x[1])
+	valid_pos = valid_pos[-1*math.floor(threshold*len(valid_pos)):]
+	threshold = valid_pos[0][1]
+	logger.info('Point-biserial threshold value: '+str(threshold))
+	valid_pos = [x[0] for x in valid_pos]
 
 	#write out the results
 	sorted_rs = reversed(sorted(results_minus_nan, key=lambda dict_key: abs(results_minus_nan[dict_key])))
@@ -155,9 +162,6 @@ def calc(threshold,all_data,parallel,unit):
 	plt.clf()
 	plt.close()
 	
-	logger.info('Before removing columns, the alignment length is: '+str(len(results.keys())))
-	logger.info('Keeping columns from the MSA if abs(r-scores) >= '+str(threshold))
-	valid_pos = [pos for pos in AA_ref_valid if abs(results[pos])>=threshold]
 
 	positions_values ={pos:results[pos] for pos in AA_ref_valid}
 	positions_values_z ={pos:(results[pos]-mean)/stdev for pos in AA_ref_valid}

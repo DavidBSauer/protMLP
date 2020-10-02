@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 #calculate the point biserial correlation coefficient between AA distribution (one-hot encoded) vs OGT
 from scipy.stats import pointbiserialr, zscore
 import matplotlib.pyplot as plt
@@ -7,11 +6,11 @@ logger = logging.getLogger('MLP_training')
 import multiprocessing as mp
 import os
 import numpy as np
-from tqdm import tqdm
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from matplotlib import cm
+import math
 
 
 def comparison(my_input):
@@ -35,7 +34,7 @@ def comparison(my_input):
 	plt.close()
 	return {'AA':name,'r':r}
 
-def biserial(threshold,all_data,parallel,unit):
+def biserial(threshold,all_data,threads,unit):
 	"""Calculate positional biserial correlation of AA to trait"""
 	if not(os.path.isdir('./results/positional_correlations/')):
 		os.mkdir('./results/positional_correlations/')
@@ -45,19 +44,27 @@ def biserial(threshold,all_data,parallel,unit):
 	AA_ref.remove('target')
 	to_analyze = [(pos,all_data['train'][pos].values,all_data['train']['target'].values,unit) for pos in AA_ref]
 
+	print('Calculating point-biserial correlation coefficient.')
 	logger.info('Calculating point-biserial correlation coefficient.')
-	if parallel:
-		#multithread for performance
-		p = mp.Pool()
-		results = p.map(comparison,to_analyze)
-		p.close()
-		p.join()
-	else:
-		#single thread for trouble shooting
-		results = map(comparison,tqdm(to_analyze,unit='position'))
+	#multithread for performance
+	p = mp.Pool(threads)
+	results = p.map(comparison,to_analyze,1)
+	p.close()
+	p.join()
 	results = {x['AA']:x['r'] for x in results}
 	AA_ref_valid = [x for x in AA_ref if not(np.isnan(results[x]))]
 	results_minus_nan = {x:results[x] for x in AA_ref_valid}
+
+	logger.info('Before removing columns, the alignment length is: '+str(len(results.keys())))
+	#logger.info('Keeping columns from the MSA if abs(r-scores) >= '+str(threshold))
+	#valid_pos = [pos for pos in AA_ref_valid if abs(results[pos])>=threshold]
+	logger.info('Fraction of columns kept based on abs(r-scores): '+str(threshold))
+	valid_pos = [(pos,abs(results[pos])) for pos in AA_ref_valid]
+	valid_pos.sort(key=lambda x:x[1])
+	valid_pos = valid_pos[-1*math.floor(threshold*len(valid_pos)):]
+	threshold = valid_pos[0][1]
+	logger.info('Point-biserial threshold value: '+str(threshold))
+	valid_pos = [x[0] for x in valid_pos]
 
 	#write out the results
 	sorted_rs = reversed(sorted(results_minus_nan, key=lambda dict_key: abs(results_minus_nan[dict_key])))
@@ -135,9 +142,9 @@ def biserial(threshold,all_data,parallel,unit):
 	plt.clf()
 	plt.close()
 	
-	logger.info('Before removing columns, the alignment length is: '+str(len(results.keys())))
-	logger.info('Keeping columns from the MSA if abs(r_pb) >= '+str(threshold))
-	valid_pos = [pos for pos in AA_ref_valid if abs(results[pos])>=threshold]
+	#logger.info('Before removing columns, the alignment length is: '+str(len(results.keys())))
+	#logger.info('Keeping columns from the MSA if abs(r_pb) >= '+str(threshold))
+	#valid_pos = [pos for pos in AA_ref_valid if abs(results[pos])>=threshold]
 
 	positions_values ={pos:results[pos] for pos in AA_ref_valid}
 	positions_values_z ={pos:(results[pos]-mean)/stdev for pos in AA_ref_valid}

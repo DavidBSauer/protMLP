@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 from Bio import AlignIO
 from Bio.Align import MultipleSeqAlignment
 from Bio.SeqRecord import SeqRecord
@@ -33,11 +32,14 @@ def gaps(MSA_ref,threshold):
 
 	return MSA2
 	
-def removeXs(MSA):
-	"""Remove sequences with non-canonical AAs"""
+def removeXs(MSA,nucleotide):
+	"""Remove sequences with non-canonical AAs or nucleotides"""
 	seqs = []
+	AA_set = {'A','C','D','E','F','G','H','I','K','L','M','N','P','Q','R','S','T','V','W','Y','-','.'}
+	if nucleotide:
+		AA_set = {'A','C','G','T','-','.'}
 	for x in MSA:
-		if set(list(str(x.seq).upper())).issubset({'A','C','D','E','F','G','H','I','K','L','M','N','P','Q','R','S','T','V','W','Y','-','.'}):
+		if set(list(str(x.seq).upper())).issubset(AA_set):
 			seqs.append(SeqRecord(Seq(str(x.seq).upper().replace('.','-'),x.seq.alphabet),x.id,'',''))
 	MSA = MultipleSeqAlignment(seqs)
 	return MSA
@@ -46,11 +48,14 @@ def rendundant_names(MSA):
 	"""Give unique names to sequences"""
 	names = []
 	for x in MSA:
-		names.append(x.id.split('/')[0].split('.')[0])
+		names.append(x.id.split('/')[0].split('.')[0].split('_')[0])
 	names = Counter(names)
 	seqs = []
 	for x in MSA:
-		seqs.append(SeqRecord(Seq(str(x.seq),x.seq.alphabet),str(x.id.split('/')[0].split('.')[0])+'_'+str(names[x.id.split('/')[0].split('.')[0]]),'',''))
+		seqs.append(SeqRecord(Seq(str(x.seq),x.seq.alphabet),str(x.id.split('/')[0].split('.')[0].split('_')[0])+'#'+str(names[x.id.split('/')[0].split('.')[0]]),'',''))
 		names[x.id.split('/')[0].split('.')[0]] = names[x.id.split('/')[0].split('.')[0]] -1
 	MSA = MultipleSeqAlignment(seqs)
 	return MSA
+
+def remove_all_gaps(MSA):
+	return [SeqRecord(Seq(str(x.seq).replace('-','').replace('.',''),x.seq.alphabet),x.id.split('|')[0],'','') for x in MSA]

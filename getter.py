@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord
 from Bio import SeqIO
@@ -16,7 +15,7 @@ logger.info('accessing uniprot on: '+datetime.datetime.utcnow().strftime('%m/%d/
 min_time_per = 0.34 #max of ~3 per second
 
 def uniprot(txt):
-	return txt.split('_')[0]
+	return txt.split('#')[0]
 
 def retriever_spec(x):
 	"""Get species of origin for protein (if available) and return if protein is non-fragment"""
@@ -76,12 +75,16 @@ def retriever_non_frag(x):
 	return to_return	
 
 
-def spec(MSA):
+def spec(MSA,verbose):
 	"""Label each sequence with the species of origin"""
 	#run for list of ids to avoid repeatedly looking up multi-domain proteins
 	ids = list(set([uniprot(x.id) for x in MSA]))
 	logger.info('Uniprot records to retrieve: '+str(len(ids)))
-	id_species ={id:retriever_spec(id) for id in tqdm(ids,unit='ID')}
+	if verbose:
+		print('Finding species records')
+		id_species ={id:retriever_spec(id) for id in tqdm(ids,unit='ID')}
+	else:
+		id_species ={id:retriever_spec(id) for id in ids}
 	id_species ={id:id_species[id][1] for id in id_species.keys() if id_species[id][0]}
 	logger.info('Uniprot records retrieved with species: '+str(len(id_species.keys())))
 	#add the species if it is available
@@ -89,12 +92,16 @@ def spec(MSA):
 	MSA_new= MultipleSeqAlignment(MSA_new)
 	return MSA_new
 
-def non_frag(MSA):
+def non_frag(MSA,verbose):
 	"""Retain each sequence if non-fragment"""
 	#run for list of ids to avoid repeatedly looking up multi-domain proteins
 	ids = list(set([uniprot(x.id) for x in MSA]))
 	logger.info('Uniprot records to retrieve: '+str(len(ids)))
-	id_nonfrag ={id:retriever_non_frag(id) for id in tqdm(ids,unit='ID')}
+	if verbose:
+		print('Finding fragment sequences')
+		id_nonfrag ={id:retriever_non_frag(id) for id in tqdm(ids,unit='ID')}
+	else:
+		id_nonfrag ={id:retriever_non_frag(id) for id in ids}
 	id_nonfrag =[id for id in id_nonfrag.keys() if id_nonfrag[id]]
 	logger.info('Uniprot records retrieved which are non-fragment: '+str(len(id_nonfrag)))
 	#add the species if it is available

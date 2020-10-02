@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 import logging
 logger = logging.getLogger('MLP_training')
 logger.setLevel(logging.INFO)
@@ -28,16 +27,17 @@ logger.info('NumPy version: '+np.__version__)
 import balancer
 import shutil
 import math
-from tqdm import tqdm
 import biserial
 import tophat
 import argparse
 from Bio.Align import MultipleSeqAlignment
-import tfMLP as MLP
+import regressors
 from scipy.stats import wilcoxon
 from scipy.stats import chisquare
 import networks
 import identity as identity_calc
+import diversity as div
+from tqdm import tqdm
 
 
 #defaults
@@ -48,7 +48,7 @@ G = 10
 balanced = False
 th_threshold = None
 bs_threshold = None
-parallel = False
+parallel = 1
 max_layer = float('inf')
 identity = False
 to_keep = 0.2
@@ -56,20 +56,24 @@ unique = False
 identity_test = False
 unit = 'Tg'
 efficient = False
+knn = False
+diversity = False
+nucleotide = False
+verbose = False
 
 parser = argparse.ArgumentParser(description='Step 3. One-hot encode the protein sequences. Optionally remove less significant columns and/or rebalance the data. Calculate a linear regression and all possible MLPs.')
 parser.add_argument("-tr","--train",action='store', type=str, help="The MSA training file in FASTA format.",dest='train_file',default=None)
 parser.add_argument("-te","--test",action='store', type=str, help="The MSA testing file in FASTA format.",dest='test_file',default=None)
-parser.add_argument("-v", "--validation", type=str,help="The MSA validation file in FASTA format.",action="store",dest='val_file',default=None)
+parser.add_argument("-vd", "--validation", type=str,help="The MSA validation file in FASTA format.",action="store",dest='val_file',default=None)
 parser.add_argument("-o", "--overdetermined",action='store', type=float, help="The overdetermined level required of the MLPs. Default is "+str(overdetermined_level)+'.',dest='overdetermined',default=overdetermined_level)
 parser.add_argument("-ld", "--max_depth",action='store', type=int, help="The maximum number of hidden layers (depth) in the MLPs. Default is "+str(max_depth)+'.',dest='max_depth',default=max_depth)
 parser.add_argument("-lw", "--max_width",action='store', type=int, help="The maximum number of nodes (width) in a layer of the MLPs. Default is "+str(max_layer)+'.',dest='max_layer',default=max_layer)
 parser.add_argument("-n", "--max_MLP",action='store', type=int, help="The maximum number of MLPs to train per generation. Default is "+str(max_num)+'.',dest='max_num',default=max_num)
 parser.add_argument("-b", "--balance",action='store_true', help="The balance the training MSA. Default is "+str(balanced)+'.',dest='balance',default=balanced)
 threshes = parser.add_mutually_exclusive_group()
-threshes.add_argument("-th", "--th_threshold",action='store', type=float, help="Threshold for the tophat fit correlation coefficients. Used to exclude columns in the MSA. Default is "+str(th_threshold)+'.',dest='th_threshold',default=th_threshold)
-threshes.add_argument("-pb", "--pb_threshold",action='store', type=float, help="Threshold for the point-biserial correlation coefficients. Used to exclude columns in the MSA. Default is "+str(bs_threshold)+'.',dest='bs_threshold',default=bs_threshold)
-parser.add_argument("-p", "--parallel",help="Run parallel where-ever possible. Avoid using if there are errors (sometimes seen in the labels of plots). Default is "+str(parallel),action="store_true",dest='parallel',default=parallel)
+threshes.add_argument("-th", "--th_frac",action='store', type=float, help="Fraction of the tophat fit correlation coefficients. Used to exclude columns in the MSA. Default is "+str(th_threshold)+'.',dest='th_threshold',default=th_threshold)
+threshes.add_argument("-pb", "--pb_frac",action='store', type=float, help="Fraction of the point-biserial correlation coefficients. Used to exclude columns in the MSA. Default is "+str(bs_threshold)+'.',dest='bs_threshold',default=bs_threshold)
+parser.add_argument("-p", "--parallel",help="Number of threads to run in parallel. Avoid using if there are errors (sometimes seen in the labels of plots). Default is "+str(parallel),action="store",dest='parallel',default=parallel)
 parser.add_argument("-g", "--generations",type=int,help="Number of generations to run the genetic algorithm. Default is "+str(G),dest='G',default=G)
 parser.add_argument("-k", "--keep",type=float,help="Fraction of the MLPs to keep every generation. Default is "+str(to_keep),dest='to_keep',default=to_keep)
 parser.add_argument("-i", "--identity",help="Train regressions with an identity activation function for comparison. Default is "+str(identity),action="store_true",dest='identity',default=identity)
@@ -77,7 +81,10 @@ parser.add_argument("-uo", "--unique_overdetermined",help="Use the number of uni
 parser.add_argument("-ti", "--train_identity",help="Compare the test prediction residual versus maximum identity to the training dataset. Default is "+str(identity_test),action="store_true",dest='identity_test',default=identity_test)
 parser.add_argument("-u", "--unit",help="Description/unit for the regression target. Default is "+str(unit),action="store",dest='unit',default=unit)
 parser.add_argument("-e", "--efficient",help="Use unsigned 8-bit intergers for the one-hot encoded protein sequence, rather than standard 32-bit floats. This will reduced memory use ~75%. Default is "+str(efficient),action="store_true",dest='efficient',default=efficient)
-
+parser.add_argument("-knn", "--kNN",help="Calculate a regression using k-Nearest-Neighbors. Default is "+str(efficient),action="store_true",dest='knn',default=knn)
+parser.add_argument("-d", "--diversity",help="Calculate the diversity and information content of the training sequences. Default is "+str(diversity),action="store_true",dest='div',default=diversity)
+parser.add_argument("-nuc", "--nucleotide",help="The provided sequences are nucleotide sequences. Does not change regression behavior, but is used for diversity calculation and making neater plots. Default is "+str(nucleotide),action="store_true",dest='nuc',default=nucleotide)
+parser.add_argument("-v", "--verbose",help="Verbose. Show progress bars while training MLPs. Default is "+str(verbose),action="store_true",dest='verbose',default=verbose)
 
 args = parser.parse_args()
 training_file = args.train_file
@@ -89,7 +96,7 @@ max_num = args.max_num
 balanced = args.balance
 th_threshold = args.th_threshold
 bs_threshold = args.bs_threshold
-parallel = args.parallel
+parallel = int(args.parallel)
 max_layer = args.max_layer
 G = args.G
 to_keep = args.to_keep
@@ -98,6 +105,10 @@ unique = args.unique
 identity_test = args.identity_test
 unit = args.unit
 efficient = args.efficient
+knn = args.knn
+diversity = args.div
+nucleotide = args.nuc
+verbose = args.verbose
 
 #log the run parameters
 logger.info('Description/unit of the regression target: '+str(unit))
@@ -110,7 +121,7 @@ logger.info('Number of generations: '+str(G))
 logger.info('Balancing: '+str(balanced))
 logger.info('Tophat r-score Z-score column removal threshold: '+str(th_threshold))
 logger.info('Biserial r-score Z-score column removal threshold: '+str(bs_threshold))
-logger.info('Running parallel: '+str(parallel))
+logger.info('Number of threads: '+str(parallel))
 logger.info('Training MLP with identity activation function: '+str(identity))
 logger.info('The training file is: '+str(training_file))
 logger.info('The test file is: '+str(testing_file))
@@ -118,6 +129,10 @@ logger.info('The validation file is: '+str(val_file))
 logger.info('Use unique training sequences to calculate overdetermined level: '+str(unique))
 logger.info('Calculate the pairwise percent identity versus difference in '+unit+' between the training and test sets: '+str(identity_test))
 logger.info('Use unsigned 8-bit intergers for the one hot encoded sequence: '+str(efficient))
+logger.info('Calculate a k-Nearest Neighbor regression: '+str(knn))
+logger.info('Calculate the diversity of the training sequences: '+str(diversity))
+logger.info('Nucleotide sequences: '+str(nucleotide))
+logger.info('Verbose mode: '+str(verbose))
 
 files = {}
 for file in [('train',training_file),('test',testing_file),('valid',val_file)]:
@@ -189,9 +204,14 @@ for y in range(0,length,1):
 				logger.info('Warning: '+x.seq[y]+' at column '+str(y+1)+' is in the validation set, but not in the training set.')
 				warned[x.seq[y]] = True	
 
+#calculate diversity, if requested
+if diversity:
+	logger.info('The mean positional diversity of the training sequences is: '+str(div.divaa(files['train'],nucleotide,parallel)))
+	logger.info('The information content the training sequences is: '+str(div.information(files['train'],nucleotide,parallel)))
+
 #convert the MSAs to binary lists of AA sequences (excluding invariant positions)
 logger.info('One-hot encoding the protein sequences')
-onehot_data = converter.convert_to_pd(files,parallel,efficient)
+onehot_data = converter.convert_to_pd(files,parallel,efficient,nucleotide)
 logger.info('The mean training '+unit+': '+str(np.mean(onehot_data['train']['target'])))
 
 #calculate biserial r-values only if threshold given
@@ -270,7 +290,7 @@ logger.info('Validation sequences maximum: '+str(onehot_data['valid']['target'].
 logger.info('Total size of data (in MB): '+str((sum(onehot_data['train'].memory_usage())+sum(onehot_data['test'].memory_usage())+sum(onehot_data['valid'].memory_usage()))/(1024**2)))
 
 logger.info('Setting up common training parameters')
-MLP.setup(onehot_data,unit)
+regressors.setup(onehot_data,unit,parallel)
 
 n_input = onehot_data['train'].shape[1]-2
 
@@ -289,9 +309,9 @@ logger.info('Calculating linear regression')
 #run linear regression
 if (onehot_data['train'].shape[1]-1)>onehot_data['train'].shape[0]:
 	logger.info('Warning! Linear regression will be underdetermined. More values to fit than sequences in training set.')
-lin = MLP.trainer((None,'Linear'))
+lin = regressors.trainer((None,'Linear'))
 logger.info('Linear regression gives validation MSE of: '+str(lin['MSE']))
-lin = MLP.final_eval((None,'Linear'))
+lin = regressors.final_eval((None,'Linear'))
 logger.info('Linear regression gives MSE of: '+str(lin['MSE'])+', RMSE of: '+str(lin['RMSE'])+', r-value: '+str(lin['r'])+', data/param: '+str(lin['data_param']))
 f = open('./results/NN_results.tsv','w')
 f.write('Network\tLayers\tConnections\tdata/param\tMSE\tRMSE\tr-value')
@@ -309,22 +329,28 @@ elif len(population)>0:
 	all_results_relu =[]
 	all_results_ident =[]
 	if not(brute):
-		print('Training generation: 0')
 		#train
-		results = [MLP.trainer((NN,'ReLu')) for NN in tqdm(population,unit='MLP')]
+		if verbose:
+			print('Training generation: 0')
+			results = [regressors.trainer((NN,'ReLu')) for NN in tqdm(population,unit='MLP')]
+		else:
+			results = [regressors.trainer((NN,'ReLu')) for NN in population]
+
 		all_results_relu.append(results)
 		if identity:
-			all_results_ident.append([MLP.trainer((NN,'Identity')) for NN in tqdm(population,unit='MLP')])
+			if verbose:
+				all_results_ident.append([regressors.trainer((NN,'Identity')) for NN in tqdm(population,unit='MLP')])
+			else:
+				all_results_ident.append([regressors.trainer((NN,'Identity')) for NN in population])
 		sorted_results = sorted(results, key=lambda k: k['MSE'])
 		best = sorted_results[0]
 		#move best MLP
 		os.mkdir('./results/MLP_best')
 		shutil.copyfile('./results/MLP_'+'-'.join([str(x) for x in best['NN']])+'/ReLu/model.h5', './results/MLP_best/model.h5')
-		logger.info('The best MLP of generation 0 has a topology of '+'-'.join([str(x) for x in best['NN']])+' validation dataset MSE of '+str(sorted_results[0]['MSE']))
+		logger.info('The best MLP as-of generation 0 has a topology of '+'-'.join([str(x) for x in best['NN']])+' validation dataset MSE of '+str(sorted_results[0]['MSE']))
 		for nn in results:
 			shutil.rmtree('./results/MLP_'+'-'.join([str(x) for x in nn['NN']]))
 		for g in range(1,G,1):
-			print('Training generation: '+str(g))
 			#select the top to_keep%, recombine and mutate
 			population = sorted_results[:int(len(sorted_results)*to_keep)+1]
 			population = [x['NN'] for x in population]
@@ -338,10 +364,17 @@ elif len(population)>0:
 			#generate a population of neural networks.
 			population = random.sample(population,min([len(population),max_num]))
 			#train
-			results = [MLP.trainer((NN,'ReLu')) for NN in tqdm(population,unit='MLP')]
+			if verbose:
+				print('Training generation: '+str(g))
+				results = [regressors.trainer((NN,'ReLu')) for NN in tqdm(population,unit='MLP')]
+			else:
+				results = [regressors.trainer((NN,'ReLu')) for NN in population]
 			all_results_relu.append(results)
 			if identity:
-				all_results_ident.append([MLP.trainer((NN,'Identity')) for NN in tqdm(population,unit='MLP')])
+				if verbose:
+					all_results_ident.append([regressors.trainer((NN,'Identity')) for NN in tqdm(population,unit='MLP')])
+				else:
+					all_results_ident.append([regressors.trainer((NN,'Identity')) for NN in population])
 			sorted_results = sorted(results, key=lambda k: k['MSE'])
 
 			#find the new best if it exists
@@ -356,12 +389,18 @@ elif len(population)>0:
 				shutil.rmtree('./results/MLP_'+'-'.join([str(x) for x in nn['NN']]))
 
 	else:
-		print('Using brute force to predict all possible MLP topologies.')
 		#brute force
-		results = results = [MLP.trainer((NN,'ReLu')) for NN in tqdm(population,unit="MLP")]
+		if verbose:
+			print('Using brute force to predict all possible MLP topologies.')
+			results = results = [regressors.trainer((NN,'ReLu')) for NN in tqdm(population,unit='MLP')]
+		else:
+			results = results = [regressors.trainer((NN,'ReLu')) for NN in population]
 		all_results_relu = results
 		if identity:
-			all_results_ident = [MLP.trainer((NN,'Identity')) for NN in tqdm(population,unit='MLP')]
+			if verbose:
+				all_results_ident = [regressors.trainer((NN,'Identity')) for NN in tqdm(population,unit='MLP')]
+			else:
+				all_results_ident = [regressors.trainer((NN,'Identity')) for NN in population]
 		sorted_results = sorted(results, key=lambda k: k['MSE']) 
 		best = sorted_results[0]
 		#move best MLP
@@ -371,14 +410,14 @@ elif len(population)>0:
 			shutil.rmtree('./results/MLP_'+'-'.join([str(x) for x in nn['NN']]))
 
 	#train and evaluate on best NN topology
-	result = MLP.final_eval((best['NN'],'ReLu'))
+	result = regressors.final_eval((best['NN'],'ReLu'))
 
 	logger.info('Network of topology: '+'-'.join([str(y) for y in best['NN']])+' gives test MSE of: '+str(result['MSE'])+', RMSE of: '+str(result['RMSE'])+', r-value:'+str(result['r']))
 	logger.info('Equations (sequences) to unknowns (connections) ratio: '+str(result['data_param']))
 
 	#calculate how accuracy scales with sequence similarity
 	if identity_test:
-		identity_calc.accuracy(files['train'],files['test'],result['residuals'],unit,parallel)
+		identity_calc.accuracy(files['train'],files['test'],result['residuals'],unit,result['folder'],verbose,parallel)
 
 	#plot r's by generation
 	all_relu_rs = []
@@ -441,7 +480,7 @@ elif len(population)>0:
 	#record the accuracies for all examined topologies
 	for x in range(0,len(all_results_relu),1):
 		net = '-'.join([str(x) for x in all_results_relu[x]['NN']])
-		f.write(net+'\t'+str(len(all_results_relu[x]['NN']))+'\t'+str(MLP.connections(all_results_relu[x]['NN']))+'\t'+str(all_results_relu[x]['data_param'])+'\t'+str(all_results_relu[x]['MSE'])+'\t'+str(all_results_relu[x]['RMSE'])+'\t'+str(all_results_relu[x]['r']))
+		f.write(net+'\t'+str(len(all_results_relu[x]['NN']))+'\t'+str(regressors.connections(all_results_relu[x]['NN']))+'\t'+str(all_results_relu[x]['data_param'])+'\t'+str(all_results_relu[x]['MSE'])+'\t'+str(all_results_relu[x]['RMSE'])+'\t'+str(all_results_relu[x]['r']))
 		if identity:
 			f.write('\t'+str(all_results_ident[x]['MSE'])+'\t'+str(all_results_ident[x]['RMSE'])+'\t'+str(all_results_ident[x]['r'])+'\n')
 		else:
@@ -451,9 +490,9 @@ elif len(population)>0:
 	#plot the MSE vs number of connections
 	plt.axhline(y=lin['MSE'],color='black')
 	if identity:
-		plt.plot([MLP.connections(x['NN']) for x in all_results_ident],[x['MSE'] for x in all_results_ident],'.',label='Identity',markersize=14,alpha=0.6)
-	plt.plot([MLP.connections(x['NN']) for x in all_results_relu],[x['MSE'] for x in all_results_relu],'.',label='ReLu',markersize=14,alpha=0.6)
-	plt.xlim(0,max([MLP.connections(x['NN']) for x in all_results_relu])*1.05)
+		plt.plot([regressors.connections(x['NN']) for x in all_results_ident],[x['MSE'] for x in all_results_ident],'.',label='Identity',markersize=14,alpha=0.6)
+	plt.plot([regressors.connections(x['NN']) for x in all_results_relu],[x['MSE'] for x in all_results_relu],'.',label='ReLu',markersize=14,alpha=0.6)
+	plt.xlim(0,max([regressors.connections(x['NN']) for x in all_results_relu])*1.05)
 	plt.ylim(0.5*min([x['MSE'] for x in all_results_relu]+[x['MSE'] for x in all_results_ident]),lin['MSE']+1)
 	plt.grid()
 	plt.xlabel('Number of Connections')
@@ -499,9 +538,9 @@ elif len(population)>0:
 	#plot the RMSE vs overdetermination
 	plt.axhline(y=lin['MSE'],color='black')
 	if identity:
-		plt.plot([training_seqs/MLP.connections(x['NN']) for x in all_results_ident],[x['MSE'] for x in all_results_ident],'.',label='Identity',markersize=14,alpha=0.6)
-	plt.plot([training_seqs/MLP.connections(x['NN']) for x in all_results_relu],[x['MSE'] for x in all_results_relu],'.',label='ReLu',markersize=14,alpha=0.6)
-	plt.xlim(0.5,max([training_seqs/MLP.connections(x['NN']) for x in all_results_relu])*1.05)
+		plt.plot([training_seqs/regressors.connections(x['NN']) for x in all_results_ident],[x['MSE'] for x in all_results_ident],'.',label='Identity',markersize=14,alpha=0.6)
+	plt.plot([training_seqs/regressors.connections(x['NN']) for x in all_results_relu],[x['MSE'] for x in all_results_relu],'.',label='ReLu',markersize=14,alpha=0.6)
+	plt.xlim(0.5,max([training_seqs/regressors.connections(x['NN']) for x in all_results_relu])*1.05)
 	plt.ylim(0.5*min([x['MSE'] for x in all_results_relu]+[x['MSE'] for x in all_results_ident]),lin['MSE']+1)
 	plt.grid()
 	plt.xlabel('Overdetermination')
@@ -599,5 +638,17 @@ elif len(population)>0:
 else:
 	logger.info('Insufficient sequences to train a MLP')
 f.close()
+f = open('./results/kNN_results.tsv','w')
+if knn:
+	result = regressors.knn((max_num,parallel,verbose))
+	f.write('knn validation results\nk\tMSE\tRMSE\tr\n')
+	f.write('\n'.join([str(x['k'])+'\t'+str(x['mse'])+'\t'+str(x['rmse'])+'\t'+str(x['r']) for x in result['results']]))	
+	logger.info('k Nearest Neighbors gives test MSE of: '+str(result['MSE'])+', RMSE of: '+str(result['RMSE'])+', r-value:'+str(result['r']))
 
+	#calculate how accuracy scales with sequence similarity
+	if identity_test:
+		identity_calc.accuracy(files['train'],files['test'],result['residuals'],unit,result['folder'],verbose,parallel)
+
+	
+f.close()
 logger.info('Finished normally')

@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 #take in an MSA and assign traits, keeping only those in the desired range
 
 import logging
@@ -21,17 +20,28 @@ from Bio.SeqRecord import SeqRecord
 from Bio.Seq import Seq
 import csv
 import argparse
+import identity
 
+distribution = False
 def_range = 'all'
+verbose = False
 
 parser = argparse.ArgumentParser(description="Step 2. Take in a species-trait file and MSA files. Assign trait's to all sequences based on assigned species, then remove sequences outside of provided trait range.")
 files = parser.add_argument_group('Required files')
 files.add_argument("-t",action='store', type=str, help="The species-trait file.",dest='trait',default=None)
 files.add_argument("-s","--seq",action='append', type=str, help="The MSA file in FASTA format.",dest='MSA_file',default=None)
 parser.add_argument("-r", "--range",action='store', type=str, help="The range of traits's to keep. Can be 'all', some combination of p/m/t for psychrophiles, mesophile, or thermophiles (probably only relevant when considering Tg's). Or a given range, with 'to' denoting ranges and ',' for multiple ranges. Examples: 'mt' or '-25to35,45to65'. Default is "+str(def_range)+'.',dest='range',default=def_range)
+parser.add_argument("-id", "--distribution",help="Calculate pairwise sequence identity distribution for all sequences. Default is "+str(distribution),action="store_true",dest='dist',default=distribution)
+parser.add_argument("-v", "--verbose",help="Verbose. Show progress bars while training MLPs. Default is "+str(verbose),action="store_true",dest='verbose',default=verbose)
 
 args = parser.parse_args()
 data_range = args.range
+distribution = args.dist
+verbose = args.verbose
+
+logger.info('Data range: '+str(data_range))
+logger.info('Calculate MSA sequence identity distribution: '+str(distribution))
+logger.info('Verbose mode: '+str(verbose))
 
 try:
 	#read in species-OGT file
@@ -80,7 +90,7 @@ if not(all_ogt):
 		OGT_range.append((float(20),float(45)))
 		meso = True
 
-	thermo = ('t' in data_range)
+	thermo = (('t' in data_range) and not('to' in data_range))
 	if thermo:
 		OGT_range.append((float(45),float('inf')))
 		thermo = True
@@ -101,13 +111,20 @@ for file in files.keys():
 	MSA_file = files[file]
 	logger.info('Number of sequences in the MSA: '+str(len(MSA_file)))
 	assigned = []
+	unassigned = []
 	logger.info("Assigning traits to sequences for MSA")
 	for x in MSA_file:
 		if spec(x.id) in species_temp.keys():
 			assigned.append(SeqRecord(Seq(str(x.seq),x.seq.alphabet), x.id+'|'+str(species_temp[spec(x.id)]),'',''))
+		else:
+			unassigned.append(SeqRecord(Seq(str(x.seq),x.seq.alphabet), x.id,'',''))
 	logger.info('Number of sequences with assigned traits: '+str(len(assigned)))				
+	MSA_file= MultipleSeqAlignment(unassigned)
+	AlignIO.write(MSA_file,file.split('.')[0]+"_unassigned.fa", "fasta")
+
 	MSA_file= MultipleSeqAlignment(assigned)
 	AlignIO.write(MSA_file,file.split('.')[0]+"_assigned.fa", "fasta")
+
 
 	def temp(txt):
 		a = txt.split('|')
@@ -124,5 +141,13 @@ for file in files.keys():
 	logger.info('Number of sequences in range: '+str(len(in_range)))				
 	MSA_file= MultipleSeqAlignment(in_range)
 	AlignIO.write(MSA_file,file.split('.')[0]+"_ranged.fa", "fasta")
+
+#calculate sequence identity distribution
+if distribution:
+	logger.info("Calculating pairwise distribution")
+	sequences = [x for MSA in files.keys() for x in AlignIO.read(MSA,'fasta')]
+	sequences = MultipleSeqAlignment(sequences)
+	AlignIO.write(sequences,list(files.keys())[0].split('_')[0]+"_all_ranged.fa", "fasta")
+	_ = identity.compare_all(sequences,verbose)
 
 logger.info('Exiting normally')
