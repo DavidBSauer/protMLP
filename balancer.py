@@ -2,12 +2,15 @@ import logging
 logger = logging.getLogger('MLP_training')
 from Bio.Align import MultipleSeqAlignment
 import numpy as np
-import random
+import random as python_random
 
 bins = 20
 
-def overweight(all_data):
+def overweight(all_data,seed):
 	"""Balance a provided dataset into 20 bins"""
+	np.random.seed(seed)
+	python_random.seed(seed)	
+
 	hist,bin_edges = np.histogram(all_data['train']['target'].values,bins)
 	maximum = hist.max()
 	logger.info('Maximum number of sequences in any bin: '+str(maximum))

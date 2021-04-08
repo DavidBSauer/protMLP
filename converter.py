@@ -6,7 +6,7 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from matplotlib import cm
-import random
+import random as python_random
 import pandas as pd
 
 #convert the sequences to Numpy arrays
@@ -80,9 +80,10 @@ def convert_no_temp(inputs):
 	return (AA_sequence.id,full_vector)
 
 
-def convert_to_pd(files,threads,efficient,nucleotide):
+def convert_to_pd(files,threads,efficient,nucleotide,seed):
 	"""Convert an MSA to a Pandas dataframe of one-hot encoded sequences"""
 	#plot heatmaps of MSAs
+	python_random.seed(seed)
 	to_plot = [(key,files[key],nucleotide) for key in ['train','test','valid']]
 	p = mp.Pool(threads)
 	p.map(plot,to_plot,1)
@@ -108,7 +109,7 @@ def convert_to_pd(files,threads,efficient,nucleotide):
 		p.close()
 		p.join()
 		results = list(results)
-		random.shuffle(results)
+		python_random.shuffle(results)
 		if efficient:
 			all_pd_data[file]=pd.DataFrame(data=np.array([x[1] for x in results],dtype='uint8'),columns =ref) 
 		else:
@@ -136,8 +137,9 @@ def convert_to_pd(files,threads,efficient,nucleotide):
 	
 	return all_pd_data
 	
-def convert_on_template_no_target(file,template,threads):
+def convert_on_template_no_target(file,template,threads,seed):
 	"""Convert an MSA to a Pandas dataframe of one-hot encoded sequences based on a provided template of observed AAs"""
+	python_random.seed(seed)
 	length = file.get_alignment_length()
 	logger.info('Input alignment length: '+str(length))
 	logger.info('Giving a (maximum) one-hot encoded alignment length of: '+str(length*21))
@@ -154,7 +156,7 @@ def convert_on_template_no_target(file,template,threads):
 	p.close()
 	p.join()
 	results = list(results)
-	random.shuffle(results)
+	python_random.shuffle(results)
 	pd_data=pd.DataFrame(data=np.array([x[1] for x in results],dtype='float32'),columns =ref) 
 	pd_data=pd_data.assign(id = [x[0] for x in results])
 	#pd_data.to_csv('test_alignment.csv',index=False)
@@ -168,8 +170,9 @@ def convert_on_template_no_target(file,template,threads):
 	
 	return pd_data
 
-def convert_on_template(file,template,threads):
+def convert_on_template(file,template,threads,seed):
 	"""Convert an MSA to a Pandas dataframe of one-hot encoded sequences based on a provided template of observed AAs"""
+	python_random.seed(seed)
 	length = file.get_alignment_length()
 	logger.info('Input alignment length: '+str(length))
 	logger.info('Giving a (maximum) one-hot encoded alignment length of: '+str(length*21))
@@ -186,7 +189,7 @@ def convert_on_template(file,template,threads):
 	p.close()
 	p.join()
 	results = list(results)
-	random.shuffle(results)
+	python_random.shuffle(results)
 	pd_data=pd.DataFrame(data=np.array([x[1] for x in results],dtype='float32'),columns =ref) 
 	pd_data=pd_data.assign(id = [x[0] for x in results])
 	pd_data=pd_data.assign(target = [x[-1] for x in results])

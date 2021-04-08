@@ -78,7 +78,7 @@ def spec(MSA,verbose):
 	id_species ={id:id_species[id][1] for id in id_species.keys() if id_species[id][0]}
 	logger.info('Uniprot records retrieved with species: '+str(len(id_species.keys())))
 	#add the species if it is available
-	MSA_new = [SeqRecord(Seq(str(x.seq),x.seq.alphabet), str(x.id+"|"+id_species[uniprot(x.id)]),'','') for x in MSA if uniprot(x.id) in id_species]
+	MSA_new = [SeqRecord(Seq(str(x.seq)), str(x.id+"|"+id_species[uniprot(x.id)]),'','') for x in MSA if uniprot(x.id) in id_species]
 	MSA_new= MultipleSeqAlignment(MSA_new)
 	return MSA_new
 
@@ -95,7 +95,7 @@ def non_frag(MSA,verbose):
 	id_nonfrag =[id for id in id_nonfrag.keys() if id_nonfrag[id]]
 	logger.info('Uniprot records retrieved which are non-fragment: '+str(len(id_nonfrag)))
 	#add the species if it is available
-	MSA_new = [SeqRecord(Seq(str(x.seq),x.seq.alphabet), str(x.id),'','') for x in MSA if uniprot(x.id) in id_nonfrag]
+	MSA_new = [SeqRecord(Seq(str(x.seq)), str(x.id),'','') for x in MSA if uniprot(x.id) in id_nonfrag]
 	MSA_new= MultipleSeqAlignment(MSA_new)
 	return MSA_new	
 

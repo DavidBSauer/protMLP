@@ -60,12 +60,15 @@ knn = False
 diversity = False
 nucleotide = False
 verbose = False
+RFR = False
+seed = random.randint(0,10**9)
+knn_k = 10
 
 parser = argparse.ArgumentParser(description='Step 3. One-hot encode the protein sequences. Optionally remove less significant columns and/or rebalance the data. Calculate a linear regression and all possible MLPs.')
 parser.add_argument("-tr","--train",action='store', type=str, help="The MSA training file in FASTA format.",dest='train_file',default=None)
 parser.add_argument("-te","--test",action='store', type=str, help="The MSA testing file in FASTA format.",dest='test_file',default=None)
 parser.add_argument("-vd", "--validation", type=str,help="The MSA validation file in FASTA format.",action="store",dest='val_file',default=None)
-parser.add_argument("-o", "--overdetermined",action='store', type=float, help="The overdetermined level required of the MLPs. Default is "+str(overdetermined_level)+'.',dest='overdetermined',default=overdetermined_level)
+parser.add_argument("-o", "--overdetermined",action='store', type=float, help="The overdetermined level required of the MLPs and RFR. Default is "+str(overdetermined_level)+'.',dest='overdetermined',default=overdetermined_level)
 parser.add_argument("-ld", "--max_depth",action='store', type=int, help="The maximum number of hidden layers (depth) in the MLPs. Default is "+str(max_depth)+'.',dest='max_depth',default=max_depth)
 parser.add_argument("-lw", "--max_width",action='store', type=int, help="The maximum number of nodes (width) in a layer of the MLPs. Default is "+str(max_layer)+'.',dest='max_layer',default=max_layer)
 parser.add_argument("-n", "--max_MLP",action='store', type=int, help="The maximum number of MLPs to train per generation. Default is "+str(max_num)+'.',dest='max_num',default=max_num)
@@ -81,10 +84,13 @@ parser.add_argument("-uo", "--unique_overdetermined",help="Use the number of uni
 parser.add_argument("-ti", "--train_identity",help="Compare the test prediction residual versus maximum identity to the training dataset. Default is "+str(identity_test),action="store_true",dest='identity_test',default=identity_test)
 parser.add_argument("-u", "--unit",help="Description/unit for the regression target. Default is "+str(unit),action="store",dest='unit',default=unit)
 parser.add_argument("-e", "--efficient",help="Use unsigned 8-bit intergers for the one-hot encoded protein sequence, rather than standard 32-bit floats. This will reduced memory use ~75%. Default is "+str(efficient),action="store_true",dest='efficient',default=efficient)
-parser.add_argument("-knn", "--kNN",help="Calculate a regression using k-Nearest-Neighbors. Default is "+str(efficient),action="store_true",dest='knn',default=knn)
+parser.add_argument("-knn", "--kNN",help="Calculate a k-Nearest-Neighbors regression. Default is "+str(knn),action="store_true",dest='knn',default=knn)
+parser.add_argument("-knn_max_k", "--kNN_max_k",type=int,help="Maximum number of neighbors (k) to evaluate when optimizing kNN regressors. Default is "+str(knn_k),dest='knn_k',default=knn_k)
+parser.add_argument("-rfr", "--RFR",help="Calculate a Random Forest Regression. Default is "+str(RFR),action="store_true",dest='RFR',default=RFR)
 parser.add_argument("-d", "--diversity",help="Calculate the diversity and information content of the training sequences. Default is "+str(diversity),action="store_true",dest='div',default=diversity)
 parser.add_argument("-nuc", "--nucleotide",help="The provided sequences are nucleotide sequences. Does not change regression behavior, but is used for diversity calculation and making neater plots. Default is "+str(nucleotide),action="store_true",dest='nuc',default=nucleotide)
 parser.add_argument("-v", "--verbose",help="Verbose. Show progress bars while training MLPs. Default is "+str(verbose),action="store_true",dest='verbose',default=verbose)
+parser.add_argument("-s", "--seed",type=int,help="Seed for the regression. Randomly generated value is "+str(seed),dest='seed',default=seed)
 
 args = parser.parse_args()
 training_file = args.train_file
@@ -109,6 +115,9 @@ knn = args.knn
 diversity = args.div
 nucleotide = args.nuc
 verbose = args.verbose
+seed = args.seed
+RFR = args.RFR
+knn_k = args.knn_k
 
 #log the run parameters
 logger.info('Description/unit of the regression target: '+str(unit))
@@ -130,9 +139,15 @@ logger.info('Use unique training sequences to calculate overdetermined level: '+
 logger.info('Calculate the pairwise percent identity versus difference in '+unit+' between the training and test sets: '+str(identity_test))
 logger.info('Use unsigned 8-bit intergers for the one hot encoded sequence: '+str(efficient))
 logger.info('Calculate a k-Nearest Neighbor regression: '+str(knn))
+logger.info('Maximum number of neighbors (k) to consider in kNN: '+str(knn_k))
+logger.info('Calculate a Random Forest regression: '+str(RFR))
 logger.info('Calculate the diversity of the training sequences: '+str(diversity))
 logger.info('Nucleotide sequences: '+str(nucleotide))
 logger.info('Verbose mode: '+str(verbose))
+logger.info('Seed is: '+str(seed))
+
+random.seed(seed)
+
 
 files = {}
 for file in [('train',training_file),('test',testing_file),('valid',val_file)]:
@@ -211,7 +226,7 @@ if diversity:
 
 #convert the MSAs to binary lists of AA sequences (excluding invariant positions)
 logger.info('One-hot encoding the protein sequences')
-onehot_data = converter.convert_to_pd(files,parallel,efficient,nucleotide)
+onehot_data = converter.convert_to_pd(files,parallel,efficient,nucleotide,seed)
 logger.info('The mean training '+unit+': '+str(np.mean(onehot_data['train']['target'])))
 
 #calculate biserial r-values only if threshold given
@@ -250,7 +265,7 @@ plt.clf()
 plt.close()
 
 if balanced:
-	onehot_data = balancer.overweight(onehot_data)
+	onehot_data = balancer.overweight(onehot_data,seed)
 
 	#make a figure of balanced OGT values
 	n,bins,patches=plt.hist(onehot_data['train']['target'],50,density=False,label='Balanced Training')
@@ -290,7 +305,8 @@ logger.info('Validation sequences maximum: '+str(onehot_data['valid']['target'].
 logger.info('Total size of data (in MB): '+str((sum(onehot_data['train'].memory_usage())+sum(onehot_data['test'].memory_usage())+sum(onehot_data['valid'].memory_usage()))/(1024**2)))
 
 logger.info('Setting up common training parameters')
-regressors.setup(onehot_data,unit,parallel)
+regressors.setup_data(onehot_data,unit)
+regressors.setup_params(parallel,seed)
 
 n_input = onehot_data['train'].shape[1]-2
 
@@ -303,7 +319,7 @@ logger.info('Maximum number of nodes in a layer: '+str(max_layer))
 
 #find all valid NNs
 logger.info('Building out MLP topologies to train')
-(brute,population)= networks.builder(G,max_num,max_depth,overdetermined_level,n_input,training_seqs,max_layer,parallel)
+(brute,population)= networks.builder(G,max_num,max_depth,overdetermined_level,n_input,training_seqs,max_layer,parallel,seed)
 
 logger.info('Calculating linear regression')
 #run linear regression
@@ -314,12 +330,12 @@ logger.info('Linear regression gives validation MSE of: '+str(lin['MSE']))
 lin = regressors.final_eval((None,'Linear'))
 logger.info('Linear regression gives MSE of: '+str(lin['MSE'])+', RMSE of: '+str(lin['RMSE'])+', r-value: '+str(lin['r'])+', data/param: '+str(lin['data_param']))
 f = open('./results/NN_results.tsv','w')
-f.write('Network\tLayers\tConnections\tdata/param\tMSE\tRMSE\tr-value')
+f.write('Network\tLayers\tConnections\tdata/param\tMSE\tMAE\tRMSE\tr-value\tspearman r-value')
 if identity:
-	f.write('\tident_MSE\tident_RMSE\tident_r\n')
+	f.write('\tident_MSE\tident_MSA\tident_RMSE\tident_r\tident_spearman_r\n')
 else:
 	f.write('\n')
-f.write('linear\t1\t'+str(onehot_data['train'].shape[1]-1)+'\t'+str(lin['data_param'])+'\t'+str(lin['MSE'])+'\t'+str(lin['RMSE'])+'\t'+str(lin['r'])+'\n')
+f.write('linear\t1\t'+str(onehot_data['train'].shape[1]-1)+'\t'+str(lin['data_param'])+'\t'+str(lin['MSE'])+'\t'+str(lin['MAE'])+'\t'+str(lin['RMSE'])+'\t'+str(lin['r'])+'\t'+str(lin['spearman'])+'\n')
 
 if max_num == 0:
 	#catch if not training any MLPs
@@ -412,7 +428,12 @@ elif len(population)>0:
 	#train and evaluate on best NN topology
 	result = regressors.final_eval((best['NN'],'ReLu'))
 
-	logger.info('Network of topology: '+'-'.join([str(y) for y in best['NN']])+' gives test MSE of: '+str(result['MSE'])+', RMSE of: '+str(result['RMSE'])+', r-value:'+str(result['r']))
+	logger.info('Best overall Network of topology: '+'-'.join([str(y) for y in best['NN']]))
+	logger.info('Test MSE of: '+str(result['MSE']))
+	logger.info('Test MAE of: '+str(result['MAE']))
+	logger.info('Test RMSE of: '+str(result['RMSE']))
+	logger.info('Test Spearman r-value:'+str(result['spearman']))
+	logger.info('Test Pearson r-value:'+str(result['r']))
 	logger.info('Equations (sequences) to unknowns (connections) ratio: '+str(result['data_param']))
 
 	#calculate how accuracy scales with sequence similarity
@@ -423,11 +444,13 @@ elif len(population)>0:
 	all_relu_rs = []
 	all_ident_rs = []
 	generation = []
+	generation_ident = []
 	for y in range(0,len(all_results_relu),1):
-		all_relu_rs = all_relu_rs + [x['r'] for x in all_results_relu[y]]
-		generation = generation+ [y]*len(all_results_relu[y])
+		all_relu_rs = all_relu_rs + [x['r'] for x in all_results_relu[y] if not((np.isnan(x['r']) or np.isinf(x['r'])))]
+		generation = generation+ [y for x in all_results_relu[y] if not((np.isnan(x['r']) or np.isinf(x['r'])))]
 		if identity:
-			all_ident_rs = all_ident_rs + [x['r'] for x in all_results_ident[y]]
+			all_ident_rs = all_ident_rs + [x['r'] for x in all_results_ident[y] if not((np.isnan(x['r']) or np.isinf(x['r'])))]
+			generation_ident = generation_ident + [y for x in all_results_ident[y] if not((np.isnan(x['r']) or np.isinf(x['r'])))]
 	plt.axhline(y=lin['r'],color='black')
 	if identity:
 		plt.plot(generation,all_ident_rs,'.',label='Identity',markersize=14,alpha=0.6)
@@ -447,10 +470,15 @@ elif len(population)>0:
 	#plot mse by generation
 	all_relu_mses = []
 	all_ident_mses = []
+	generation = []
+	generation_ident = []
+
 	for y in range(0,len(all_results_relu),1):
-		all_relu_mses = all_relu_mses + [x['MSE'] for x in all_results_relu[y]]
+		all_relu_mses = all_relu_mses + [x['MSE'] for x in all_results_relu[y] if not((np.isnan(x['MSE']) or np.isinf(x['MSE'])))]
+		generation = generation+ [y for x in all_results_relu[y] if not((np.isnan(x['MSE']) or np.isinf(x['MSE'])))]
 		if identity:
-			all_ident_mses = all_ident_mses + [x['MSE'] for x in all_results_ident[y]]
+			all_ident_mses = all_ident_mses + [x['MSE'] for x in all_results_ident[y] if not((np.isnan(x['MSE']) or np.isinf(x['MSE'])))]
+			generation_ident = generation_ident + [y for x in all_results_ident[y] if not((np.isnan(x['MSE']) or np.isinf(x['MSE'])))]
 	plt.axhline(y=lin['MSE'],color='black')
 	if identity:
 		plt.plot(generation,all_ident_mses,'.',label='Identity',markersize=14,alpha=0.6)
@@ -480,9 +508,9 @@ elif len(population)>0:
 	#record the accuracies for all examined topologies
 	for x in range(0,len(all_results_relu),1):
 		net = '-'.join([str(x) for x in all_results_relu[x]['NN']])
-		f.write(net+'\t'+str(len(all_results_relu[x]['NN']))+'\t'+str(regressors.connections(all_results_relu[x]['NN']))+'\t'+str(all_results_relu[x]['data_param'])+'\t'+str(all_results_relu[x]['MSE'])+'\t'+str(all_results_relu[x]['RMSE'])+'\t'+str(all_results_relu[x]['r']))
+		f.write(net+'\t'+str(len(all_results_relu[x]['NN']))+'\t'+str(regressors.connections(all_results_relu[x]['NN']))+'\t'+str(all_results_relu[x]['data_param'])+'\t'+str(all_results_relu[x]['MSE'])+'\t'+str(all_results_relu[x]['MAE'])+'\t'+str(all_results_relu[x]['RMSE'])+'\t'+str(all_results_relu[x]['r'])+'\t'+str(all_results_relu[x]['spearman']))
 		if identity:
-			f.write('\t'+str(all_results_ident[x]['MSE'])+'\t'+str(all_results_ident[x]['RMSE'])+'\t'+str(all_results_ident[x]['r'])+'\n')
+			f.write('\t'+str(all_results_ident[x]['MSE'])+'\t'+str(all_results_ident[x]['MAE'])+'\t'+str(all_results_ident[x]['RMSE'])+'\t'+str(all_results_ident[x]['r'])+'\t'+str(all_results_ident[x]['spearman'])+'\n')
 		else:
 			f.write('\n')
 
@@ -493,7 +521,7 @@ elif len(population)>0:
 		plt.plot([regressors.connections(x['NN']) for x in all_results_ident],[x['MSE'] for x in all_results_ident],'.',label='Identity',markersize=14,alpha=0.6)
 	plt.plot([regressors.connections(x['NN']) for x in all_results_relu],[x['MSE'] for x in all_results_relu],'.',label='ReLu',markersize=14,alpha=0.6)
 	plt.xlim(0,max([regressors.connections(x['NN']) for x in all_results_relu])*1.05)
-	plt.ylim(0.5*min([x['MSE'] for x in all_results_relu]+[x['MSE'] for x in all_results_ident]),lin['MSE']+1)
+	plt.ylim(0.5*min([x['MSE'] for x in all_results_relu if not((np.isnan(x['MSE']) or np.isinf(x['MSE'])))]+[x['MSE'] for x in all_results_ident if not((np.isnan(x['MSE']) or np.isinf(x['MSE'])))]),lin['MSE']+1)
 	plt.grid()
 	plt.xlabel('Number of Connections')
 	plt.ylabel('MSE of Validation Data')
@@ -509,7 +537,7 @@ elif len(population)>0:
 		plt.plot([len(x['NN']) for x in all_results_ident],[x['MSE'] for x in all_results_ident],'.',label='Identity',markersize=14,alpha=0.6)
 	plt.plot([len(x['NN']) for x in all_results_relu],[x['MSE'] for x in all_results_relu],'.',label='ReLu',markersize=14,alpha=0.6)
 	plt.xlim(0,max([len(x['NN']) for x in all_results_relu])+1)
-	plt.ylim(0.5*min([x['MSE'] for x in all_results_relu]+[x['MSE'] for x in all_results_ident]),lin['MSE']+1)
+	plt.ylim(0.5*min([x['MSE'] for x in all_results_relu if not((np.isnan(x['MSE']) or np.isinf(x['MSE'])))]+[x['MSE'] for x in all_results_ident if not((np.isnan(x['MSE']) or np.isinf(x['MSE'])))]),lin['MSE']+1)
 	plt.grid()
 	plt.xlabel('Number of Layers')
 	plt.ylabel('MSE of Validation Data')
@@ -519,13 +547,13 @@ elif len(population)>0:
 	plt.clf()
 	plt.close()	
 
-	#plot the RMSE vs max width
+	#plot the MSE vs max width
 	plt.axhline(y=lin['MSE'],color='black')
 	if identity:
 		plt.plot([max(x['NN']) for x in all_results_ident],[x['MSE'] for x in all_results_ident],'.',label='Identity',markersize=14,alpha=0.6)
 	plt.plot([max(x['NN']) for x in all_results_relu],[x['MSE'] for x in all_results_relu],'.',label='ReLu',markersize=14,alpha=0.6)
 	plt.xlim(0,max([max(x['NN']) for x in all_results_relu])+1)
-	plt.ylim(0.5*min([x['MSE'] for x in all_results_relu]+[x['MSE'] for x in all_results_ident]),lin['MSE']+1)
+	plt.ylim(0.5*min([x['MSE'] for x in all_results_relu if not((np.isnan(x['MSE']) or np.isinf(x['MSE'])))]+[x['MSE'] for x in all_results_ident if not((np.isnan(x['MSE']) or np.isinf(x['MSE'])))]),lin['MSE']+1)
 	plt.grid()
 	plt.xlabel('Max Layer Width')
 	plt.ylabel('MSE of Validation Data')
@@ -535,13 +563,13 @@ elif len(population)>0:
 	plt.clf()
 	plt.close()	
 
-	#plot the RMSE vs overdetermination
+	#plot the MSE vs overdetermination
 	plt.axhline(y=lin['MSE'],color='black')
 	if identity:
 		plt.plot([training_seqs/regressors.connections(x['NN']) for x in all_results_ident],[x['MSE'] for x in all_results_ident],'.',label='Identity',markersize=14,alpha=0.6)
 	plt.plot([training_seqs/regressors.connections(x['NN']) for x in all_results_relu],[x['MSE'] for x in all_results_relu],'.',label='ReLu',markersize=14,alpha=0.6)
 	plt.xlim(0.5,max([training_seqs/regressors.connections(x['NN']) for x in all_results_relu])*1.05)
-	plt.ylim(0.5*min([x['MSE'] for x in all_results_relu]+[x['MSE'] for x in all_results_ident]),lin['MSE']+1)
+	plt.ylim(0.5*min([x['MSE'] for x in all_results_relu if not((np.isnan(x['MSE']) or np.isinf(x['MSE'])))]+[x['MSE'] for x in all_results_ident if not((np.isnan(x['MSE']) or np.isinf(x['MSE'])))]),lin['MSE']+1)
 	plt.grid()
 	plt.xlabel('Overdetermination')
 	plt.ylabel('MSE of Validation Data')
@@ -556,8 +584,8 @@ elif len(population)>0:
 	hist_range = list(np.linspace(min(rmses_relu)*0.95,max(rmses_relu)*1.05,40))
 	plt.axvline(x=lin['RMSE'],color='black')
 	if identity:
-		rmses_relu = [all_results_relu[x]['RMSE'] for x in range(0,len(all_results_relu),1) if (not(math.isnan(all_results_relu[x]['RMSE'])) and not(math.isnan(all_results_ident[x]['RMSE'])))]
-		rmses_lin = [all_results_ident[x]['RMSE'] for x in range(0,len(all_results_ident),1) if (not(math.isnan(all_results_relu[x]['RMSE'])) and not(math.isnan(all_results_ident[x]['RMSE'])))]
+		rmses_relu = [all_results_relu[x]['RMSE'] for x in range(0,len(all_results_relu),1) if (not(math.isnan(all_results_relu[x]['RMSE']) or math.isinf(all_results_relu[x]['RMSE'])) and not(math.isnan(all_results_ident[x]['RMSE']) or math.isinf(all_results_ident[x]['RMSE'])))]
+		rmses_lin = [all_results_ident[x]['RMSE'] for x in range(0,len(all_results_ident),1) if (not(math.isnan(all_results_relu[x]['RMSE']) or math.isinf(all_results_relu[x]['RMSE'])) and not(math.isnan(all_results_ident[x]['RMSE']) or math.isinf(all_results_ident[x]['RMSE'])))]
 		if len(rmses_relu)>0:
 			hist_range = list(np.linspace(min(rmses_lin+rmses_relu)*0.95,max(rmses_lin+rmses_relu)*1.05,40))
 			plt.hist(rmses_lin,hist_range,density=False,label='Identity',alpha=0.6)
@@ -581,8 +609,8 @@ elif len(population)>0:
 	hist_range = list(np.linspace(min(mses_relu)*0.95,max(mses_relu)*1.05,40))
 	plt.axvline(x=lin['MSE'],color='black')
 	if identity:
-		mses_relu = [all_results_relu[x]['MSE'] for x in range(0,len(all_results_relu),1) if (not(math.isnan(all_results_relu[x]['MSE'])) and not(math.isnan(all_results_ident[x]['MSE'])))]
-		mses_lin = [all_results_ident[x]['MSE'] for x in range(0,len(all_results_ident),1) if (not(math.isnan(all_results_relu[x]['MSE'])) and not(math.isnan(all_results_ident[x]['MSE'])))]
+		mses_relu = [all_results_relu[x]['MSE'] for x in range(0,len(all_results_relu),1) if (not(math.isnan(all_results_relu[x]['MSE']) or math.isinf(all_results_relu[x]['MSE'])) and not(math.isnan(all_results_ident[x]['MSE']) or math.isinf(all_results_ident[x]['MSE'])))]
+		mses_lin = [all_results_ident[x]['MSE'] for x in range(0,len(all_results_ident),1) if (not(math.isnan(all_results_relu[x]['MSE']) or math.isinf(all_results_relu[x]['MSE'])) and not(math.isnan(all_results_ident[x]['MSE']) or math.isinf(all_results_ident[x]['MSE'])))]
 		if len(mses_relu)>0:
 			hist_range = list(np.linspace(min(mses_lin+mses_relu)*0.95,max(mses_lin+mses_relu)*1.05,40))
 			plt.hist(mses_lin,hist_range,density=False,label='Identity',alpha=0.6)
@@ -601,6 +629,31 @@ elif len(population)>0:
 	plt.clf()
 	plt.close()
 
+	#plot histogram of mae's
+	MAEs_relu = [all_results_relu[x]['MAE'] for x in range(0,len(all_results_relu),1) if not(math.isnan(all_results_relu[x]['MAE']))]
+	hist_range = list(np.linspace(min(MAEs_relu)*0.95,max(MAEs_relu)*1.05,40))
+	plt.axvline(x=lin['MAE'],color='black')
+	if identity:
+		MAEs_relu = [all_results_relu[x]['MAE'] for x in range(0,len(all_results_relu),1) if (not(math.isnan(all_results_relu[x]['MAE']) or math.isinf(all_results_relu[x]['MAE'])) and not(math.isnan(all_results_ident[x]['MAE']) or math.isinf(all_results_ident[x]['MAE'])))]
+		MAEs_lin = [all_results_ident[x]['MAE'] for x in range(0,len(all_results_ident),1) if (not(math.isnan(all_results_relu[x]['MAE'] or math.isinf(all_results_relu[x]['MAE']))) and not(math.isnan(all_results_ident[x]['MAE']) or math.isinf(all_results_ident[x]['MAE'])))]
+		if len(MAEs_relu)>0:
+			hist_range = list(np.linspace(min(MAEs_lin+MAEs_relu)*0.95,max(MAEs_lin+MAEs_relu)*1.05,40))
+			plt.hist(MAEs_lin,hist_range,density=False,label='Identity',alpha=0.6)
+	plt.hist(MAEs_relu,hist_range,density=False,label='ReLu',alpha=0.6)
+	plt.tick_params(axis='x', which='both',bottom=True,top=False)
+	plt.legend()
+	plt.xlabel("Trained MLPs Validation MAE")
+	plt.ylabel('Count')
+	if len(MAEs_relu)>20:
+		if identity:
+			(t,p) = wilcoxon(MAEs_relu,MAEs_lin)
+			plt.title("Wilcoxon p: "+str(p))
+			logger.info('The Wilcoxon p-value of the MAEs using a ReLu versus linear activation function: '+str(p))
+	plt.savefig('./results/MLP_MAE_histogram.png')
+	plt.cla()
+	plt.clf()
+	plt.close()
+
 	#plot histogram of rs's
 	rs_relu = [all_results_relu[x]['r'] for x in range(0,len(all_results_relu),1) if not(math.isnan(all_results_relu[x]['r']))]
 	hist_range = list(np.linspace(min(rs_relu)*0.95,max(rs_relu)*1.05,40))
@@ -609,8 +662,8 @@ elif len(population)>0:
 		hist_range = list(np.linspace(min(rs_relu)*1.05,max(rs_relu)*1.05,40))		
 
 	if identity:
-		rs_relu = [all_results_relu[x]['r'] for x in range(0,len(all_results_relu),1) if (not(math.isnan(all_results_relu[x]['r'])) and not(math.isnan(all_results_ident[x]['r'])))]
-		rs_lin = [all_results_ident[x]['r'] for x in range(0,len(all_results_ident),1) if (not(math.isnan(all_results_relu[x]['r'])) and not(math.isnan(all_results_ident[x]['r'])))]
+		rs_relu = [all_results_relu[x]['r'] for x in range(0,len(all_results_relu),1) if (not(math.isnan(all_results_relu[x]['r']) or math.isinf(all_results_relu[x]['r'])) and not(math.isnan(all_results_ident[x]['r']) or math.isinf(all_results_ident[x]['r'])))]
+		rs_lin = [all_results_ident[x]['r'] for x in range(0,len(all_results_ident),1) if (not(math.isnan(all_results_relu[x]['r']) or math.isinf(all_results_relu[x]['r'])) and not(math.isnan(all_results_ident[x]['r']) or math.isinf(all_results_ident[x]['r'])))]
 		if len(rs_relu)>0:
 			hist_range = list(np.linspace(min(rs_lin+rs_relu)*0.95,max(rs_lin+rs_relu)*1.05,40))
 			if min(rs_relu+rs_lin) <0:
@@ -635,20 +688,68 @@ elif len(population)>0:
 	plt.clf()
 	plt.close()	
 
+	#plot histogram of spearman rs's
+	spearman_relu = [all_results_relu[x]['spearman'] for x in range(0,len(all_results_relu),1) if not(math.isnan(all_results_relu[x]['spearman']))]
+	hist_range = list(np.linspace(min(spearman_relu)*0.95,max(spearman_relu)*1.05,40))
+	if min(spearman_relu) <0:
+		#catch if the minimum r-value is negative
+		hist_range = list(np.linspace(min(spearman_relu)*1.05,max(spearman_relu)*1.05,40))		
+
+	if identity:
+		spearman_relu = [all_results_relu[x]['spearman'] for x in range(0,len(all_results_relu),1) if (not(math.isnan(all_results_relu[x]['spearman']) or math.isinf(all_results_relu[x]['spearman'])) and not(math.isnan(all_results_ident[x]['spearman']) or math.isinf(all_results_ident[x]['spearman'])))]
+		spearman_lin = [all_results_ident[x]['spearman'] for x in range(0,len(all_results_ident),1) if (not(math.isnan(all_results_relu[x]['spearman']) or math.isinf(all_results_relu[x]['spearman'])) and not(math.isnan(all_results_ident[x]['spearman']) or math.isinf(all_results_ident[x]['spearman'])))]
+		if len(spearman_relu)>0:
+			hist_range = list(np.linspace(min(spearman_lin+spearman_relu)*0.95,max(spearman_lin+spearman_relu)*1.05,40))
+			if min(spearman_relu+spearman_lin) <0:
+				#catch if the minimum r-value is negative
+				hist_range = list(np.linspace(min(spearman_lin+spearman_relu)*1.05,max(spearman_lin+spearman_relu)*1.05,40))		
+	
+	plt.axvline(x=lin['spearman'],color='black')
+	if identity:
+		plt.hist(spearman_lin,hist_range,density=False,label='Identity',alpha=0.6)
+	plt.hist(spearman_relu,hist_range,density=False,label='ReLu',alpha=0.6)
+	plt.tick_params(axis='x', which='both',bottom=True,top=False)
+	plt.legend()
+	plt.xlabel("Trained MLPs Validation r-values")
+	plt.ylabel('Count')
+	if len(spearman_relu)>20:
+		if identity:
+			(t,p) = wilcoxon(spearman_relu,spearman_lin)
+			plt.title("Wilcoxon p: "+str(p))
+			logger.info('The Wilcoxon p-value of the Spearman r-values using a ReLu versus linear activation function: '+str(p))
+	plt.savefig('./results/MLP_spearman_r_value_histogram.png')
+	plt.cla()
+	plt.clf()
+	plt.close()	
+
 else:
 	logger.info('Insufficient sequences to train a MLP')
 f.close()
+
+#run RF regression if requested
+f = open('./results/RFR_results.tsv','w')
+if RFR:
+	result = regressors.RFR((parallel,overdetermined_level,verbose))
+	f.write('RFR validation results\ntrees\tMSE\tMAE\tRMSE\tr\tspearman r\n')
+	f.write('\n'.join([str(x['k'])+'\t'+str(x['mse'])+'\t'+str(x['mae'])+'\t'+str(x['rmse'])+'\t'+str(x['r'])+'\t'+str(x['spearman']) for x in result['results']]))	
+	logger.info('Random Forest regression gives test MSE of: '+str(result['MSE'])+', RMSE of: '+str(result['RMSE'])+', r-value:'+str(result['r']))
+
+	#calculate how accuracy scales with sequence similarity
+	if identity_test:
+		identity_calc.accuracy(files['train'],files['test'],result['residuals'],unit,result['folder'],verbose,parallel)
+f.close()
+
+#run kNN if requested
 f = open('./results/kNN_results.tsv','w')
 if knn:
-	result = regressors.knn((max_num,parallel,verbose))
-	f.write('knn validation results\nk\tMSE\tRMSE\tr\n')
-	f.write('\n'.join([str(x['k'])+'\t'+str(x['mse'])+'\t'+str(x['rmse'])+'\t'+str(x['r']) for x in result['results']]))	
+	result = regressors.knn((parallel,knn_k,verbose))
+	f.write('knn validation results\nk\tMSE\tMAE\tRMSE\tr\tspearman r\n')
+	f.write('\n'.join([str(x['k'])+'\t'+str(x['mse'])+'\t'+str(x['mae'])+'\t'+str(x['rmse'])+'\t'+str(x['r'])+'\t'+str(x['spearman']) for x in result['results']]))	
 	logger.info('k Nearest Neighbors gives test MSE of: '+str(result['MSE'])+', RMSE of: '+str(result['RMSE'])+', r-value:'+str(result['r']))
 
 	#calculate how accuracy scales with sequence similarity
 	if identity_test:
 		identity_calc.accuracy(files['train'],files['test'],result['residuals'],unit,result['folder'],verbose,parallel)
-
-	
 f.close()
+
 logger.info('Finished normally')

@@ -28,11 +28,12 @@ prune = None
 unit = 'Tg'
 scan = None
 verbose = False
+seed = random.randint(0,10**9)
 
 parser = argparse.ArgumentParser(description='Given a trained model and input template, predict the optimal growth temperature of a FASTA file of protein sequences.')
 parser.add_argument("-m","--model",action='store', type=str, help="The regression model (model.h5) file to use.",dest='model',default=None)
 parser.add_argument("-t","--template",action='store', type=str, help="The template file of MLP inputs. (From step3 this will be the file NN_AA_template.txt.)",dest='template',default=None)
-parser.add_argument("-s", "--sparcity",help="Sparcity target in the final MLP after pruning. Fraction of the weights to set to zero. Set 'auto' to prune until the MLP is overdetermined.",action="store",dest='prune',default=prune,type=str)
+parser.add_argument("-sp", "--sparcity",help="Sparcity target in the final MLP after pruning. Fraction of the weights to set to zero. Set 'auto' to prune until the MLP is overdetermined.",action="store",dest='prune',default=prune,type=str)
 parser.add_argument("-tr","--train",action='store', type=str, help="The MSA training file in FASTA format.",dest='train_file',default=None)
 parser.add_argument("-te","--test",action='store', type=str, help="The MSA testing file in FASTA format.",dest='test_file',default=None)
 parser.add_argument("-vd", "--validation", type=str,help="The MSA validation file in FASTA format.",action="store",dest='val_file',default=None)
@@ -40,6 +41,8 @@ parser.add_argument("-p", "--parallel",help="Number of threads to run in paralle
 parser.add_argument("-u", "--unit",help="Description/unit for the regression target. Default is "+str(unit),action="store",dest='unit',default=unit)
 parser.add_argument("-sc", "--scan",type=float,help="Scan sparcity levels in 0.01 (1 percent) increments.",action="store",dest='scan',default=scan)
 parser.add_argument("-v", "--verbose",help="Verbose. Show progress bars while training MLPs. Default is "+str(verbose),action="store_true",dest='verbose',default=verbose)
+parser.add_argument("-s", "--seed",type=int,help="Seed for the regression. Randomly generated value is "+str(seed),dest='seed',default=seed)
+
 
 folder = './pruned'
 if not(os.path.isdir(folder)):
@@ -56,6 +59,10 @@ parallel = int(args.parallel)
 unit = args.unit
 scan = args.scan
 verbose = args.verbose
+seed = args.seed
+
+random.seed(seed)
+
 
 logger.info('Template file: '+str(template))
 logger.info('Model file: '+str(model))
@@ -66,7 +73,7 @@ logger.info('Train file: '+str(training_file))
 logger.info('Test file: '+str(testing_file))
 logger.info('Validation file: '+str(val_file))
 logger.info('Description/unit of the regression target: '+str(unit))
-
+logger.info('Seed is: '+str(seed))
 logger.info('Verbose: '+str(verbose))
 
 old_model = keras.models.load_model(model)
@@ -109,9 +116,9 @@ except:
 else:
 	pass
 
-training_file = converter.convert_on_template(training_file,template,parallel)
-testing_file = converter.convert_on_template(testing_file,template,parallel)
-val_file = converter.convert_on_template(val_file,template,parallel)
+training_file = converter.convert_on_template(training_file,template,parallel,seed)
+testing_file = converter.convert_on_template(testing_file,template,parallel,seed)
+val_file = converter.convert_on_template(val_file,template,parallel,seed)
 
 train_data = training_file.copy(deep=True)	
 train_ids = train_data.pop('id')

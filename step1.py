@@ -24,11 +24,12 @@ nucleotide = False
 parallel = 1
 cdhit = None
 verbose = False
+seed = random.randint(0,10**9)
 
 parser = argparse.ArgumentParser(description='Step 1. Take in an MSA file and assign the species from Uniprot (locally or via web). Will remove fragments and gap incuding sequences and generate train, test, and validation MSAs')
 files = parser.add_argument_group('Required file')
-files.add_argument("-f","--fasta",action='append', type=str, help="The MSA file in FASTA format. Can be invoked multiple times for multiple files.",dest='input_fasta',default=[])
-files.add_argument("-s","--stock",action='append', type=str, help="The MSA file in Stockholm format. Can be invoked multiple times for multiple files.",dest='input_stock',default=[])
+files.add_argument("-fa","--fasta",action='append', type=str, help="The MSA file in FASTA format. Can be invoked multiple times for multiple files.",dest='input_fasta',default=[])
+files.add_argument("-stk","--stock",action='append', type=str, help="The MSA file in Stockholm format. Can be invoked multiple times for multiple files.",dest='input_stock',default=[])
 parser.add_argument("-t", "--threshold",action='store', type=float, help="Removing sequences which cause gaps at a frequency greater than provided frequency. Default is "+str(threshold)+'.',dest='threshold',default=threshold)
 parser.add_argument("-c", "--cluster",action='store', type=str, help="Cluster sequences to this fraction identity using CD-HIT (range 0.0-1.0)",dest='cluster',default=cluster)
 parser.add_argument("-cdhit",action='store', type=str, help="CD-Hit executable",dest='cdhit',default=cdhit)
@@ -38,6 +39,8 @@ parser.add_argument("-ld", "--local_dat",action='append', type=str, help="Provid
 parser.add_argument("-nuc", "--nucleotide",help="The provided sequences are nucleotide sequences. Does not change regression behavior, but is used for diversity calculation and making neater plots. Default is "+str(nucleotide),action="store_true",dest='nuc',default=nucleotide)
 parser.add_argument("-p", "--parallel",help="Number of threads to run in parallel. Default is "+str(parallel),action="store",dest='parallel',default=parallel)
 parser.add_argument("-v", "--verbose",help="Verbose: show progress printed in console. Default is "+str(verbose),action="store_true",dest='verbose',default=verbose)
+parser.add_argument("-s", "--seed",type=int,help="Seed for the regression. Randomly generated value is "+str(seed),dest='seed',default=seed)
+
 
 args = parser.parse_args()
 
@@ -47,6 +50,7 @@ threshold = args.threshold
 parallel = int(args.parallel)
 cdhit = args.cdhit
 verbose = args.verbose
+seed = args.seed
 
 logger.info('Sequences are nucleotide sequences: '+str(nucleotide))
 logger.info('Clustering tsv file: '+str(cluster))
@@ -54,6 +58,8 @@ logger.info('Degapping threshold: '+str(threshold))
 logger.info('Number of threads to run in parallel: '+str(parallel))
 logger.info('CD-Hit executable: '+str(cdhit))
 logger.info('Verbose: '+str(verbose))
+logger.info('Seed is: '+str(seed))
+random.seed(seed)
 
 MSA_files = args.input_fasta+args.input_stock
 if len(MSA_files)==0:

@@ -1,5 +1,5 @@
 import multiprocessing as mp
-import random
+import random as python_random
 import sys
 import logging
 import regressors
@@ -11,7 +11,9 @@ overdetermined_level = 1
 training_seqs = 0
 threads = 1
 
-def builder(generations,num_per_generation,depth,level,n_input,train,layer,par):
+
+
+def builder(generations,num_per_generation,depth,level,n_input,train,layer,par,seed):
 	"""Build MLP topologies based on maximum width, depth, overdetermined level"""
 	global max_depth 
 	max_depth = depth
@@ -23,6 +25,7 @@ def builder(generations,num_per_generation,depth,level,n_input,train,layer,par):
 	max_layer = layer 
 	global threads
 	threads = par
+	python_random.seed(seed)
 
 	logger.info('The theoretical maximum number of MLP topologies to build: '+str(float((2*(max_layer-1))**max_depth)))
 	logger.info('The maximum number of MLP topologies to train over all generations: '+str(generations*num_per_generation))
@@ -49,10 +52,10 @@ def builder(generations,num_per_generation,depth,level,n_input,train,layer,par):
 		max_layer = int(((training_seqs/overdetermined_level)-n_input*2-2)/3) #assuming the max is a two-layer network with 2 as the first layer
 		logger.info('The maximum number of nodes in any layer and still within the overdetermined level is: '+str(max_layer))
 		while len(NNs)<num_per_generation:
-			num_layers = random.randint(1,max_depth)
+			num_layers = python_random.randint(1,max_depth)
 			to_add =[]
 			for _ in range(0,num_layers,1):
-				to_add.append(random.randint(2,max_layer))
+				to_add.append(python_random.randint(2,max_layer))
 			if training_seqs/(overdetermined_level*regressors.connections(to_add))>=1.0:
 				if not(to_add in NNs):
 					NNs.append(to_add)
@@ -62,8 +65,8 @@ def builder(generations,num_per_generation,depth,level,n_input,train,layer,par):
 def recombiner(input):
 	"""Randomly recombine two topologies"""	
 	(net1,net2) = input
-	joint1 = random.randint(0,len(net1)-1)
-	joint2 = random.randint(0,len(net2)-1)
+	joint1 = python_random.randint(0,len(net1)-1)
+	joint2 = python_random.randint(0,len(net2)-1)
 	new_network = net1[:joint1]+net2[joint2:]
 	if training_seqs/(overdetermined_level*regressors.connections(new_network))>=1.0: 
 		if max_depth >= len(new_network):
@@ -83,8 +86,8 @@ def recombine(possible):
 def mutater(network):
 	"""Randomly mutate a topology"""
 	new_network =[x for x in network]
-	layer = random.randint(0,len(new_network)-1)
-	new_network[layer] = random.randint(2,max_layer)
+	layer = python_random.randint(0,len(new_network)-1)
+	new_network[layer] = python_random.randint(2,max_layer)
 	if training_seqs/(overdetermined_level*regressors.connections(new_network))>=1.0:
 		return (True,network)
 	return (False,None)

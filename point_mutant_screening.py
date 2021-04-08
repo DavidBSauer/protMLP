@@ -16,7 +16,9 @@ from Bio.Seq import Seq
 from Bio import AlignIO
 import multiprocessing as mp
 import pandas as pd
+import random
 
+seed = random.randint(0,10**9)
 AA_dict = {'A':0,'C':1,'D':2,'E':3,'F':4,'G':5,'H':6,'I':7,'K':8,'L':9,'M':10,'N':11,'P':12,'Q':13,'R':14,'S':15,'T':16,'V':17,'W':18,'Y':19,'-':20}
 AAs = ['A','C','D','E','F','G','H','I','K','L','M','N','P','Q','R','S','T','V','W','Y','-']
 mut_num =1
@@ -24,12 +26,14 @@ mut_num =1
 parallel = 1
 batch = float('inf')
 parser = argparse.ArgumentParser(description='Given a trained model and input template, predict the optimal growth temperature of mutants of a provided protein sequence.')
-parser.add_argument("-s","--seq",action='store', type=str, help="The FASTA file of a sequence from which mutants will be generated. Must be aligned to the training data.",dest='file',default=None)
+parser.add_argument("-sq","--seq",action='store', type=str, help="The FASTA file of a sequence from which mutants will be generated. Must be aligned to the training data.",dest='file',default=None)
 parser.add_argument("-t","--template",action='store', type=str, help="The template file of MLP inputs. (From step3 this will be the file AA_template.txt.)",dest='template',default=None)
 parser.add_argument("-m","--model",action='store', type=str, help="The regression model (model.h5) file to use.",dest='model',default=None)
 parser.add_argument("-p", "--parallel",help="Run parallel where-ever possible. Avoid using if there are errors. Default is "+str(parallel),action="store",dest='parallel',default=parallel)
 parser.add_argument("-n","--mut_num",action='store',type=int,help='The maximum number of mutants to generate within the pepite sequence. Note: this will grow exponentially! Default is '+str(mut_num),dest='mut_num',default=mut_num)
 parser.add_argument("-b","--batch",action='store',type=int,help='Calculate in batches. This is helpful if the number of mutations in high, which can lead to high memory use and possibly the program crashing. Optimal batch size will depend upon protein length, but 4 to 5 are typically reasonable.',dest='batch',default=batch)
+parser.add_argument("-s", "--seed",type=int,help="Seed for the regression. Randomly generated value is "+str(seed),dest='seed',default=seed)
+
 
 args = parser.parse_args()
 parallel = int(args.parallel)
@@ -38,6 +42,7 @@ template = args.template
 model = args.model
 mut_num = args.mut_num
 batch = 10**args.batch
+seed = args.seed
 
 logger.info('Target sequence file: '+str(file))
 logger.info('Template file: '+str(template))
@@ -45,7 +50,7 @@ logger.info('Model file: '+str(model))
 logger.info('Number of threads to run in parallel: '+str(parallel))
 logger.info('Maximum number of mutants: '+str(mut_num))
 logger.info('Batch size: '+str(batch))
-
+logger.info('Seed is: '+str(seed))
 
 if ((file == None) or (template == None) or (model == None)):
 	logger.info('Need a trained model, template, and sequences to predict; which were not provided. Quitting')
@@ -62,6 +67,7 @@ except:
 	sys.exit()
 else:
 	pass
+
 
 #read in the template
 if not(os.path.isfile(template)):
@@ -118,7 +124,7 @@ for num in range(1,mut_num,1):
 
 logger.info('The number of mutant sequences generated: '+str(len(mutants)))
 
-mutant_seqs = [SeqRecord(Seq(''.join(mutant[1]),input_seq.seq.alphabet), '/'.join(mutant[0]),'','') for mutant in mutants]
+mutant_seqs = [SeqRecord(Seq(''.join(mutant[1])), '/'.join(mutant[0]),'','') for mutant in mutants]
 mutant_seqs = mutant_seqs+[SeqRecord(input_seq.seq, 'WT','','')]
 MSA= MultipleSeqAlignment(mutant_seqs)
 #AlignIO.write(MSA,'mutant_sequences.fa','fasta')
@@ -143,16 +149,16 @@ if len(MSA) > batch:
 		logger.info('Calculating batch: '+str(z+1))
 
 		#covert the alignment to a PD dataframe and remove un-needed columns
-		data=converter.convert_on_template_no_target(batch,template,parallel)
+		data=converter.convert_on_template_no_target(batch,template,parallel,seed)
 
 		#predict using previously trained model
-		results = regressors.infer(model,data)
+		results = regressors.infer_MLP(model,data)
 		for index,row in results.iterrows():
 			pred_results[row['id']]=row['prediction']
 	
 else:
 	#covert the alignment to a PD dataframe and remove un-needed columns
-	data=converter.convert_on_template_no_target(MSA,template,parallel)
+	data=converter.convert_on_template_no_target(MSA,template,parallel,seed)
 
 	#predict using previously trained model
 	results = regressors.infer(model,data)

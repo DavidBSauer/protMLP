@@ -29,7 +29,7 @@ verbose = False
 parser = argparse.ArgumentParser(description="Step 2. Take in a species-trait file and MSA files. Assign trait's to all sequences based on assigned species, then remove sequences outside of provided trait range.")
 files = parser.add_argument_group('Required files')
 files.add_argument("-t",action='store', type=str, help="The species-trait file.",dest='trait',default=None)
-files.add_argument("-s","--seq",action='append', type=str, help="The MSA file in FASTA format.",dest='MSA_file',default=None)
+files.add_argument("-sq","--seq",action='append', type=str, help="The MSA file in FASTA format.",dest='MSA_file',default=None)
 parser.add_argument("-r", "--range",action='store', type=str, help="The range of traits's to keep. Can be 'all', some combination of p/m/t for psychrophiles, mesophile, or thermophiles (probably only relevant when considering Tg's). Or a given range, with 'to' denoting ranges and ',' for multiple ranges. Examples: 'mt' or '-25to35,45to65'. Default is "+str(def_range)+'.',dest='range',default=def_range)
 parser.add_argument("-id", "--distribution",help="Calculate pairwise sequence identity distribution for all sequences. Default is "+str(distribution),action="store_true",dest='dist',default=distribution)
 parser.add_argument("-v", "--verbose",help="Verbose. Show progress bars while training MLPs. Default is "+str(verbose),action="store_true",dest='verbose',default=verbose)
@@ -115,9 +115,9 @@ for file in files.keys():
 	logger.info("Assigning traits to sequences for MSA")
 	for x in MSA_file:
 		if spec(x.id) in species_temp.keys():
-			assigned.append(SeqRecord(Seq(str(x.seq),x.seq.alphabet), x.id+'|'+str(species_temp[spec(x.id)]),'',''))
+			assigned.append(SeqRecord(Seq(str(x.seq)), x.id+'|'+str(species_temp[spec(x.id)]),'',''))
 		else:
-			unassigned.append(SeqRecord(Seq(str(x.seq),x.seq.alphabet), x.id,'',''))
+			unassigned.append(SeqRecord(Seq(str(x.seq)), x.id,'',''))
 	logger.info('Number of sequences with assigned traits: '+str(len(assigned)))				
 	MSA_file= MultipleSeqAlignment(unassigned)
 	AlignIO.write(MSA_file,file.split('.')[0]+"_unassigned.fa", "fasta")

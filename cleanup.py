@@ -40,7 +40,7 @@ def removeXs(MSA,nucleotide):
 		AA_set = {'A','C','G','T','-','.'}
 	for x in MSA:
 		if set(list(str(x.seq).upper())).issubset(AA_set):
-			seqs.append(SeqRecord(Seq(str(x.seq).upper().replace('.','-'),x.seq.alphabet),x.id,'',''))
+			seqs.append(SeqRecord(Seq(str(x.seq).upper().replace('.','-')),x.id,'',''))
 	MSA = MultipleSeqAlignment(seqs)
 	return MSA
 
@@ -52,10 +52,10 @@ def rendundant_names(MSA):
 	names = Counter(names)
 	seqs = []
 	for x in MSA:
-		seqs.append(SeqRecord(Seq(str(x.seq),x.seq.alphabet),str(x.id.split('/')[0].split('.')[0].split('_')[0])+'#'+str(names[x.id.split('/')[0].split('.')[0]]),'',''))
+		seqs.append(SeqRecord(Seq(str(x.seq)),str(x.id.split('/')[0].split('.')[0].split('_')[0])+'#'+str(names[x.id.split('/')[0].split('.')[0]]),'',''))
 		names[x.id.split('/')[0].split('.')[0]] = names[x.id.split('/')[0].split('.')[0]] -1
 	MSA = MultipleSeqAlignment(seqs)
 	return MSA
 
 def remove_all_gaps(MSA):
-	return [SeqRecord(Seq(str(x.seq).replace('-','').replace('.',''),x.seq.alphabet),x.id.split('|')[0],'','') for x in MSA]
+	return [SeqRecord(Seq(str(x.seq).replace('-','').replace('.','')),x.id.split('|')[0],'','') for x in MSA]
